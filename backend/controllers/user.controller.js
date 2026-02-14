@@ -1,264 +1,242 @@
-const { User, PetOwner, Pet } = require('../models');
-const { success, error, notFound } = require('../utils/responseHandler');
-const securityLogger = require('../utils/securityLogger');
-const { Op } = require('sequelize');
+const { User } = require('../models');
+const bcrypt = require('bcryptjs');
+const { securityLogger } = require('../utils/logger');
 
-/**
- * Get all users (Admin only)
- * GET /api/users
- */
+// Get all users
 const getAllUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 10, role, status, search } = req.query;
-    const offset = (page - 1) * limit;
-
-    // Build where clause
-    const where = {};
-    if (role) where.role = role;
-    if (status) where.status = status;
-    if (search) {
-      where[Op.or] = [
-        { full_name: { [Op.like]: `%${search}%` } },
-        { email: { [Op.like]: `%${search}%` } },
-        { phone: { [Op.like]: `%${search}%` } }
-      ];
-    }
-
-    const { count, rows: users } = await User.findAndCountAll({
-      where,
-      attributes: ['user_id', 'full_name', 'email', 'phone', 'role', 'status', 'profile_image', 'created_at', 'last_login'],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
+    const users = await User.findAll({
+      attributes: ['user_id', 'full_name', 'email', 'phone', 'role', 'status', 'profile_image', 'created_at'],
       order: [['created_at', 'DESC']]
     });
 
-    return success(res, {
-      users,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / limit)
-      }
-    }, 'Users retrieved successfully');
-
-  } catch (err) {
-    securityLogger.error('Get all users error', { error: err.message });
-    return error(res, 'Failed to retrieve users', 500);
+    return res.status(200).json({
+      success: true,
+      data: {
+        users,
+        total: users.length
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Get all users error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch users',
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Get user by ID
- * GET /api/users/:id
- */
+// Get user by ID
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
 
     const user = await User.findByPk(id, {
-      attributes: ['user_id', 'full_name', 'email', 'phone', 'role', 'status', 'profile_image', 'created_at', 'last_login'],
-      include: [
-        {
-          model: PetOwner,
-          as: 'ownerProfile',
-          attributes: ['owner_id', 'address', 'city', 'postal_code', 'emergency_contact', 'registered_date'],
-          include: [
-            {
-              model: Pet,
-              as: 'pets',
-              attributes: ['pet_id', 'pet_name', 'species', 'breed', 'age', 'gender', 'status', 'profile_image']
-            }
-          ]
-        }
-      ]
+      attributes: ['user_id', 'full_name', 'email', 'phone', 'role', 'status', 'profile_image', 'email_verified', 'created_at', 'updated_at']
     });
 
     if (!user) {
-      return notFound(res, 'User');
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        timestamp: new Date().toISOString()
+      });
     }
 
-    securityLogger.logDataAccess(req.user.id, 'User', id, 'READ');
-
-    return success(res, { user }, 'User retrieved successfully');
-
-  } catch (err) {
-    securityLogger.error('Get user by ID error', { error: err.message, userId: req.params.id });
-    return error(res, 'Failed to retrieve user', 500);
+    return res.status(200).json({
+      success: true,
+      data: { user },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Get user by ID error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch user',
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Create new user (Admin only)
- * POST /api/users
- */
+// Create new user
 const createUser = async (req, res) => {
   try {
     const { full_name, email, phone, password, role, status } = req.body;
 
-    // Check if email exists
+    // Validate required fields
+    if (!full_name || !email || !phone || !password || !role) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Check if user already exists
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message: 'Email already exists',
+        message: 'User with this email already exists',
         timestamp: new Date().toISOString()
       });
     }
+
+    // Hash password
+    const password_hash = await bcrypt.hash(password, 12);
 
     // Create user
     const user = await User.create({
       full_name,
       email,
       phone,
-      password_hash: password,
+      password_hash,
       role,
-      status: status || 'Active'
+      status: status || 'Active',
+      email_verified: false
     });
 
-    // Create pet owner profile if role is Owner
-    if (user.role === 'Owner') {
-      await PetOwner.create({
-        user_id: user.user_id,
-        registered_date: new Date()
-      });
-    }
-
-    securityLogger.info('User created by admin', {
-      createdBy: req.user.id,
-      newUserId: user.user_id,
-      role: user.role
+    securityLogger.logAuth('User Created', user.user_id, true, {
+      created_by: req.user.user_id,
+      user_email: email,
+      role
     });
 
-    return success(res, { user }, 'User created successfully', 201);
-
-  } catch (err) {
-    securityLogger.error('Create user error', { error: err.message });
-    return error(res, 'Failed to create user', 500);
+    return res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      data: {
+        user: {
+          user_id: user.user_id,
+          full_name: user.full_name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          status: user.status
+        }
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Create user error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create user',
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Update user
- * PUT /api/users/:id
- */
+// Update user
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, phone, role, status } = req.body;
+    const { full_name, phone, password, role, status } = req.body;
 
     const user = await User.findByPk(id);
+
     if (!user) {
-      return notFound(res, 'User');
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Prepare update data
+    const updateData = {
+      full_name: full_name || user.full_name,
+      phone: phone || user.phone,
+      role: role || user.role,
+      status: status || user.status
+    };
+
+    // Update password if provided
+    if (password) {
+      updateData.password_hash = await bcrypt.hash(password, 12);
     }
 
     // Update user
-    await User.update(
-      { full_name, phone, role, status },
-      { where: { user_id: id } }
-    );
+    await user.update(updateData);
 
-    const updatedUser = await User.findByPk(id);
-
-    securityLogger.info('User updated', {
-      updatedBy: req.user.id,
-      userId: id
+    securityLogger.logAuth('User Updated', user.user_id, true, {
+      updated_by: req.user.user_id,
+      changes: Object.keys(updateData)
     });
 
-    return success(res, { user: updatedUser }, 'User updated successfully');
-
-  } catch (err) {
-    securityLogger.error('Update user error', { error: err.message, userId: req.params.id });
-    return error(res, 'Failed to update user', 500);
+    return res.status(200).json({
+      success: true,
+      message: 'User updated successfully',
+      data: {
+        user: {
+          user_id: user.user_id,
+          full_name: user.full_name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          status: user.status
+        }
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Update user error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update user',
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Delete user
- * DELETE /api/users/:id
- */
+// Delete user
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Prevent deleting yourself
+    if (parseInt(id) === req.user.user_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot delete your own account',
+        timestamp: new Date().toISOString()
+      });
+    }
+
     const user = await User.findByPk(id);
+
     if (!user) {
-      return notFound(res, 'User');
-    }
-
-    // Prevent deleting own account
-    if (parseInt(id) === req.user.id) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        message: 'Cannot delete your own account',
+        message: 'User not found',
         timestamp: new Date().toISOString()
       });
     }
 
-    // Delete user (cascade will handle related records)
-    await User.destroy({ where: { user_id: id } });
+    const userEmail = user.email;
 
-    securityLogger.warn('User deleted', {
-      deletedBy: req.user.id,
-      userId: id,
-      email: user.email
+    // Delete user
+    await user.destroy();
+
+    securityLogger.logAuth('User Deleted', id, true, {
+      deleted_by: req.user.user_id,
+      deleted_user_email: userEmail
     });
 
-    return success(res, null, 'User deleted successfully');
-
-  } catch (err) {
-    securityLogger.error('Delete user error', { error: err.message, userId: req.params.id });
-    return error(res, 'Failed to delete user', 500);
-  }
-};
-
-/**
- * Get users by role
- * GET /api/users/role/:role
- */
-const getUsersByRole = async (req, res) => {
-  try {
-    const { role } = req.params;
-
-    if (!['Admin', 'Vet', 'Receptionist', 'Owner'].includes(role)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid role',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    const users = await User.findAll({
-      where: { role, status: 'Active' },
-      attributes: ['user_id', 'full_name', 'email', 'phone', 'profile_image'],
-      order: [['full_name', 'ASC']]
+    return res.status(200).json({
+      success: true,
+      message: 'User deleted successfully',
+      timestamp: new Date().toISOString()
     });
-
-    return success(res, { users }, `${role}s retrieved successfully`);
-
-  } catch (err) {
-    securityLogger.error('Get users by role error', { error: err.message });
-    return error(res, 'Failed to retrieve users', 500);
-  }
-};
-
-/**
- * Get all veterinarians (for appointment booking)
- * GET /api/users/vets
- */
-const getVeterinarians = async (req, res) => {
-  try {
-    const vets = await User.findAll({
-      where: { role: 'Vet', status: 'Active' },
-      attributes: ['user_id', 'full_name', 'email', 'phone', 'profile_image'],
-      order: [['full_name', 'ASC']]
+  } catch (error) {
+    console.error('Delete user error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete user',
+      timestamp: new Date().toISOString()
     });
-
-    return success(res, { vets }, 'Veterinarians retrieved successfully');
-
-  } catch (err) {
-    securityLogger.error('Get veterinarians error', { error: err.message });
-    return error(res, 'Failed to retrieve veterinarians', 500);
   }
 };
 
@@ -267,7 +245,5 @@ module.exports = {
   getUserById,
   createUser,
   updateUser,
-  deleteUser,
-  getUsersByRole,
-  getVeterinarians
+  deleteUser
 };

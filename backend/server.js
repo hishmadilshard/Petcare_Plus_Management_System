@@ -18,12 +18,16 @@ const { sequelize, testConnection } = require('./config/db.config');
 const securityLogger = require('./utils/securityLogger');
 const { verifyEmailConfig } = require('./utils/emailService');
 
+
 // Import middleware
 const { apiLimiter } = require('./middleware/rateLimiter');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 // Import routes
 const routes = require('./routes');
+const authRoutes = require('./routes/auth.routes');
+const userRoutes = require('./routes/user.routes'); // ADD THIS LINE
+
 
 // =====================================================
 // Initialize Express App
@@ -111,6 +115,8 @@ app.use('/api', apiLimiter);
 // API Routes
 // =====================================================
 app.use('/api', routes);
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes); // ADD THIS LINE
 
 // =====================================================
 // Root Endpoint

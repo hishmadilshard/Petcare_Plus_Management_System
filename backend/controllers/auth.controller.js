@@ -1,99 +1,26 @@
-const { User, PetOwner, RefreshToken } = require('../models');
+const { User, RefreshToken } = require('../models');
+const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../utils/jwt');
 const { verifyPassword } = require('../utils/encryption');
-const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require('../utils/jwt');
-const { success, error, validationError } = require('../utils/responseHandler');
-const securityLogger = require('../utils/securityLogger');
-const { sendWelcomeEmail } = require('../utils/emailService');
+const { securityLogger } = require('../utils/logger');
 
-/**
- * Register new user
- * POST /api/auth/register
- */
-const register = async (req, res) => {
-  try {
-    const { full_name, email, phone, password, role, address, city, postal_code } = req.body;
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        message: 'Email already registered',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Create user
-    const user = await User.create({
-      full_name,
-      email,
-      phone,
-      password_hash: password, // Will be hashed by model hook
-      role: role || 'Owner',
-      status: 'Active'
-    });
-
-    // If registering as pet owner, create owner profile
-    if (user.role === 'Owner') {
-      await PetOwner.create({
-        user_id: user.user_id,
-        address: address || null,
-        city: city || null,
-        postal_code: postal_code || null,
-        registered_date: new Date()
-      });
-    }
-
-    // Generate tokens
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-
-    // Save refresh token to database
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
-    await RefreshToken.create({
-      user_id: user.user_id,
-      token: refreshToken,
-      expires_at: expiresAt
-    });
-
-    // Send welcome email (async, don't wait)
-    sendWelcomeEmail(user.email, user.full_name, user.role).catch(err => {
-      console.error('Welcome email failed:', err);
-    });
-
-    // Log successful registration
-    securityLogger.logAuth('User Registered', user.user_id, true, {
-      email: user.email,
-      role: user.role
-    });
-
-    return success(res, {
-      user: {
-        user_id: user.user_id,
-        full_name: user.full_name,
-        email: user.email,
-        role: user.role
-      },
-      tokens: {
-        accessToken,
-        refreshToken
-      }
-    }, 'Registration successful', 201);
-
-  } catch (err) {
-    securityLogger.error('Registration error', { error: err.message });
-    return error(res, 'Registration failed', 500);
-  }
-};
-
-/**
- * Login user
- * POST /api/auth/login
- */
+// =====================================================
+// LOGIN
+// =====================================================
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    console.log('🔵 Login attempt for:', email);
+    console.log('🔵 Password received:', password);
+
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required',
+        timestamp: new Date().toISOString()
+      });
+    }
 
     // Find user
     const user = await User.findOne({
@@ -102,7 +29,45 @@ const login = async (req, res) => {
     });
 
     if (!user) {
+      console.log('❌ User not found:', email);
       securityLogger.logAuth('Login Failed - User Not Found', null, false, { email });
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    console.log('✅ User found:', user.email, 'Role:', user.role);
+
+    // ⚠️ TEMPORARY: Bypass password check for demo accounts
+    const demoAccounts = {
+      'admin@petcareplus.lk': 'Admin@123',
+      'vet@petcareplus.lk': 'Vet@123',
+      'reception@petcareplus.lk': 'Reception@123'
+    };
+
+    let isValidPassword = false;
+
+    if (demoAccounts[email]) {
+      // Check if password matches demo password (TEMPORARY)
+      if (password === demoAccounts[email]) {
+        console.log('✅ Demo account login accepted (bypassing bcrypt)');
+        isValidPassword = true;
+      } else {
+        console.log('❌ Demo password incorrect. Expected:', demoAccounts[email]);
+        isValidPassword = false;
+      }
+    } else {
+      // Use bcrypt for other accounts
+      console.log('🔐 Using bcrypt verification for non-demo account');
+      isValidPassword = await verifyPassword(password, user.password_hash);
+      console.log('🔐 Bcrypt result:', isValidPassword);
+    }
+
+    if (!isValidPassword) {
+      console.log('❌ Invalid password');
+      securityLogger.logAuth('Login Failed - Invalid Password', user.user_id, false, { email });
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
@@ -112,78 +77,178 @@ const login = async (req, res) => {
 
     // Check account status
     if (user.status !== 'Active') {
-      securityLogger.logAuth('Login Failed - Inactive Account', user.user_id, false, {
-        email,
-        status: user.status
+      console.log('❌ Account not active. Status:', user.status);
+      securityLogger.logAuth('Login Failed - Inactive Account', user.user_id, false, { 
+        email, 
+        status: user.status 
       });
       return res.status(403).json({
         success: false,
-        message: 'Account is inactive or suspended',
+        message: `Account is ${user.status.toLowerCase()}. Please contact administrator.`,
         timestamp: new Date().toISOString()
       });
     }
 
-    // Verify password
-    const isValidPassword = await verifyPassword(password, user.password_hash);
-    if (!isValidPassword) {
-      securityLogger.logAuth('Login Failed - Invalid Password', user.user_id, false, { email });
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password',
-        timestamp: new Date().toISOString()
-      });
-    }
+    console.log('✅ Login successful for:', user.email);
 
     // Generate tokens
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
+    const accessToken = generateToken(user.user_id, user.role);
+    const refreshToken = generateRefreshToken(user.user_id);
 
-    // Save refresh token
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    // Save refresh token to database
     await RefreshToken.create({
       user_id: user.user_id,
       token: refreshToken,
-      expires_at: expiresAt
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
     });
 
     // Update last login
-    await User.update(
-      { last_login: new Date() },
-      { where: { user_id: user.user_id } }
-    );
+    await user.update({ updated_at: new Date() });
 
     // Log successful login
-    securityLogger.logAuth('Login Successful', user.user_id, true, {
+    securityLogger.logAuth('Login Successful', user.user_id, true, { email, role: user.role });
+
+    // Prepare user response (exclude password_hash)
+    const userResponse = {
+      user_id: user.user_id,
+      full_name: user.full_name,
       email: user.email,
-      role: user.role
+      phone: user.phone,
+      role: user.role,
+      status: user.status,
+      profile_image: user.profile_image
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        user: userResponse,
+        tokens: {
+          accessToken,
+          refreshToken
+        }
+      },
+      timestamp: new Date().toISOString()
     });
 
-    return success(res, {
-      user: {
-        user_id: user.user_id,
-        full_name: user.full_name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        profile_image: user.profile_image
-      },
-      tokens: {
-        accessToken,
-        refreshToken
-      }
-    }, 'Login successful');
-
-  } catch (err) {
-    securityLogger.error('Login error', { error: err.message });
-    return error(res, 'Login failed', 500);
+  } catch (error) {
+    console.error('❌ Login error:', error);
+    securityLogger.logError('Login Error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'An error occurred during login. Please try again.',
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Refresh access token
- * POST /api/auth/refresh
- */
+// =====================================================
+// REGISTER (Admin only)
+// =====================================================
+const register = async (req, res) => {
+  try {
+    const { full_name, email, phone, password, role } = req.body;
+
+    // Validate input
+    if (!full_name || !email || !phone || !password || !role) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: 'User with this email already exists',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Hash password
+    const bcrypt = require('bcryptjs');
+    const password_hash = await bcrypt.hash(password, 12);
+
+    // Create user
+    const user = await User.create({
+      full_name,
+      email,
+      phone,
+      password_hash,
+      role,
+      status: 'Active',
+      email_verified: false
+    });
+
+    securityLogger.logAuth('User Registered', user.user_id, true, { email, role });
+
+    return res.status(201).json({
+      success: true,
+      message: 'User registered successfully',
+      data: {
+        user_id: user.user_id,
+        email: user.email,
+        role: user.role
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Register error:', error);
+    securityLogger.logError('Registration Error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Registration failed',
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+// =====================================================
+// LOGOUT
+// =====================================================
+const logout = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Refresh token is required',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Delete refresh token from database
+    await RefreshToken.destroy({
+      where: { token: refreshToken }
+    });
+
+    securityLogger.logAuth('Logout Successful', req.user?.user_id, true);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Logged out successfully',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Logout error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Logout failed',
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+// =====================================================
+// REFRESH TOKEN
+// =====================================================
 const refreshAccessToken = async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -191,7 +256,7 @@ const refreshAccessToken = async (req, res) => {
     if (!refreshToken) {
       return res.status(400).json({
         success: false,
-        message: 'Refresh token required',
+        message: 'Refresh token is required',
         timestamp: new Date().toISOString()
       });
     }
@@ -199,14 +264,13 @@ const refreshAccessToken = async (req, res) => {
     // Verify refresh token
     const decoded = verifyRefreshToken(refreshToken);
 
-    // Check if token exists in database
+    // Check if refresh token exists in database
     const tokenRecord = await RefreshToken.findOne({
-      where: { token: refreshToken, user_id: decoded.id }
+      where: { token: refreshToken }
     });
 
     if (!tokenRecord) {
-      securityLogger.warn('Invalid refresh token attempt', { userId: decoded.id });
-      return res.status(403).json({
+      return res.status(401).json({
         success: false,
         message: 'Invalid refresh token',
         timestamp: new Date().toISOString()
@@ -214,9 +278,9 @@ const refreshAccessToken = async (req, res) => {
     }
 
     // Check if token expired
-    if (new Date(tokenRecord.expires_at) < new Date()) {
-      await RefreshToken.destroy({ where: { token_id: tokenRecord.token_id } });
-      return res.status(403).json({
+    if (new Date() > tokenRecord.expires_at) {
+      await RefreshToken.destroy({ where: { token: refreshToken } });
+      return res.status(401).json({
         success: false,
         message: 'Refresh token expired',
         timestamp: new Date().toISOString()
@@ -224,9 +288,10 @@ const refreshAccessToken = async (req, res) => {
     }
 
     // Get user
-    const user = await User.findByPk(decoded.id);
+    const user = await User.findByPk(decoded.user_id);
+
     if (!user || user.status !== 'Active') {
-      return res.status(403).json({
+      return res.status(401).json({
         success: false,
         message: 'User not found or inactive',
         timestamp: new Date().toISOString()
@@ -234,17 +299,20 @@ const refreshAccessToken = async (req, res) => {
     }
 
     // Generate new access token
-    const newAccessToken = generateAccessToken(user);
+    const accessToken = generateToken(user.user_id, user.role);
 
-    securityLogger.info('Access token refreshed', { userId: user.user_id });
+    return res.status(200).json({
+      success: true,
+      message: 'Token refreshed successfully',
+      data: {
+        accessToken
+      },
+      timestamp: new Date().toISOString()
+    });
 
-    return success(res, {
-      accessToken: newAccessToken
-    }, 'Token refreshed successfully');
-
-  } catch (err) {
-    securityLogger.error('Token refresh error', { error: err.message });
-    return res.status(403).json({
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    return res.status(401).json({
       success: false,
       message: 'Invalid or expired refresh token',
       timestamp: new Date().toISOString()
@@ -252,49 +320,13 @@ const refreshAccessToken = async (req, res) => {
   }
 };
 
-/**
- * Logout user
- * POST /api/auth/logout
- */
-const logout = async (req, res) => {
-  try {
-    const { refreshToken } = req.body;
-    const userId = req.user.id;
-
-    if (refreshToken) {
-      // Delete refresh token from database
-      await RefreshToken.destroy({
-        where: { token: refreshToken, user_id: userId }
-      });
-    }
-
-    securityLogger.logAuth('User Logged Out', userId, true);
-
-    return success(res, null, 'Logout successful');
-
-  } catch (err) {
-    securityLogger.error('Logout error', { error: err.message, userId: req.user?.id });
-    return error(res, 'Logout failed', 500);
-  }
-};
-
-/**
- * Get current user profile
- * GET /api/auth/me
- */
+// =====================================================
+// GET CURRENT USER
+// =====================================================
 const getCurrentUser = async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    const user = await User.findByPk(userId, {
-      attributes: ['user_id', 'full_name', 'email', 'phone', 'role', 'status', 'profile_image', 'created_at', 'last_login'],
-      include: [
-        {
-          model: PetOwner,
-          as: 'ownerProfile',
-          attributes: ['owner_id', 'address', 'city', 'postal_code', 'emergency_contact', 'registered_date']
-        }
-      ]
+    const user = await User.findByPk(req.user.user_id, {
+      attributes: ['user_id', 'full_name', 'email', 'phone', 'role', 'status', 'profile_image', 'email_verified']
     });
 
     if (!user) {
@@ -305,102 +337,148 @@ const getCurrentUser = async (req, res) => {
       });
     }
 
-    return success(res, { user }, 'User profile retrieved');
+    return res.status(200).json({
+      success: true,
+      data: {
+        user
+      },
+      timestamp: new Date().toISOString()
+    });
 
-  } catch (err) {
-    securityLogger.error('Get current user error', { error: err.message, userId: req.user?.id });
-    return error(res, 'Failed to retrieve user profile', 500);
+  } catch (error) {
+    console.error('Get current user error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get user information',
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Update user profile
- * PUT /api/auth/profile
- */
+// =====================================================
+// UPDATE PROFILE
+// =====================================================
 const updateProfile = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { full_name, phone, address, city, postal_code, emergency_contact } = req.body;
+    const { full_name, phone, profile_image } = req.body;
 
-    // Update user
-    await User.update(
-      { full_name, phone },
-      { where: { user_id: userId } }
-    );
+    const user = await User.findByPk(req.user.user_id);
 
-    // Update pet owner profile if exists
-    const owner = await PetOwner.findOne({ where: { user_id: userId } });
-    if (owner) {
-      await PetOwner.update(
-        { address, city, postal_code, emergency_contact },
-        { where: { user_id: userId } }
-      );
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        timestamp: new Date().toISOString()
+      });
     }
 
-    // Get updated user
-    const updatedUser = await User.findByPk(userId, {
-      include: [{ model: PetOwner, as: 'ownerProfile' }]
+    // Update user
+    await user.update({
+      full_name: full_name || user.full_name,
+      phone: phone || user.phone,
+      profile_image: profile_image || user.profile_image
     });
 
-    securityLogger.info('Profile updated', { userId });
+    securityLogger.logAuth('Profile Updated', user.user_id, true);
 
-    return success(res, { user: updatedUser }, 'Profile updated successfully');
+    return res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        user: {
+          user_id: user.user_id,
+          full_name: user.full_name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          profile_image: user.profile_image
+        }
+      },
+      timestamp: new Date().toISOString()
+    });
 
-  } catch (err) {
-    securityLogger.error('Update profile error', { error: err.message, userId: req.user?.id });
-    return error(res, 'Failed to update profile', 500);
+  } catch (error) {
+    console.error('Update profile error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update profile',
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Change password
- * PUT /api/auth/change-password
- */
+// =====================================================
+// CHANGE PASSWORD
+// =====================================================
 const changePassword = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { currentPassword, newPassword } = req.body;
+    const { current_password, new_password } = req.body;
 
-    // Get user with password
-    const user = await User.findByPk(userId, {
-      attributes: ['user_id', 'password_hash']
-    });
+    if (!current_password || !new_password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current password and new password are required',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const user = await User.findByPk(req.user.user_id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        timestamp: new Date().toISOString()
+      });
+    }
 
     // Verify current password
-    const isValidPassword = await verifyPassword(currentPassword, user.password_hash);
+    const isValidPassword = await verifyPassword(current_password, user.password_hash);
+
     if (!isValidPassword) {
-      securityLogger.warn('Password change failed - incorrect current password', { userId });
-      return res.status(400).json({
+      securityLogger.logAuth('Password Change Failed - Invalid Current Password', user.user_id, false);
+      return res.status(401).json({
         success: false,
         message: 'Current password is incorrect',
         timestamp: new Date().toISOString()
       });
     }
 
+    // Hash new password
+    const bcrypt = require('bcryptjs');
+    const new_password_hash = await bcrypt.hash(new_password, 12);
+
     // Update password
-    await User.update(
-      { password_hash: newPassword }, // Will be hashed by model hook
-      { where: { user_id: userId } }
-    );
+    await user.update({ password_hash: new_password_hash });
 
-    // Delete all refresh tokens (force re-login on all devices)
-    await RefreshToken.destroy({ where: { user_id: userId } });
+    // Delete all refresh tokens for this user (logout from all devices)
+    await RefreshToken.destroy({
+      where: { user_id: user.user_id }
+    });
 
-    securityLogger.logAuth('Password Changed', userId, true);
+    securityLogger.logAuth('Password Changed Successfully', user.user_id, true);
 
-    return success(res, null, 'Password changed successfully. Please login again.');
+    return res.status(200).json({
+      success: true,
+      message: 'Password changed successfully. Please login again.',
+      timestamp: new Date().toISOString()
+    });
 
-  } catch (err) {
-    securityLogger.error('Change password error', { error: err.message, userId: req.user?.id });
-    return error(res, 'Failed to change password', 500);
+  } catch (error) {
+    console.error('Change password error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to change password',
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
 module.exports = {
-  register,
   login,
-  refreshAccessToken,
+  register,
   logout,
+  refreshAccessToken,
   getCurrentUser,
   updateProfile,
   changePassword

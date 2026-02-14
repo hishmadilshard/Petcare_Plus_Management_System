@@ -1,57 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/user.controller');
-const { authenticateToken } = require('../middleware/authJwt');
-const { adminOnly, staffOnly } = require('../middleware/verifyRole');
-const { validateIdParam } = require('../middleware/validation');
+const { authenticate, authorize } = require('../middleware/auth.middleware');
 
-/**
- * @route   GET /api/users
- * @desc    Get all users
- * @access  Private (Admin only)
- */
-router.get('/', authenticateToken, adminOnly, userController.getAllUsers);
+// All routes require authentication
+router.use(authenticate);
 
-/**
- * @route   GET /api/users/vets
- * @desc    Get all veterinarians
- * @access  Private (Staff + Owners)
- */
-router.get('/vets', authenticateToken, userController.getVeterinarians);
+// Get all users (Admin only)
+router.get('/', authorize(['Admin']), userController.getAllUsers);
 
-/**
- * @route   GET /api/users/role/:role
- * @desc    Get users by role
- * @access  Private (Admin only)
- */
-router.get('/role/:role', authenticateToken, adminOnly, userController.getUsersByRole);
+// Get user by ID (Admin only)
+router.get('/:id', authorize(['Admin']), userController.getUserById);
 
-/**
- * @route   GET /api/users/:id
- * @desc    Get user by ID
- * @access  Private (Staff only)
- */
-router.get('/:id', authenticateToken, staffOnly, validateIdParam, userController.getUserById);
+// Create new user (Admin only)
+router.post('/', authorize(['Admin']), userController.createUser);
 
-/**
- * @route   POST /api/users
- * @desc    Create new user
- * @access  Private (Admin only)
- */
-router.post('/', authenticateToken, adminOnly, userController.createUser);
+// Update user (Admin only)
+router.put('/:id', authorize(['Admin']), userController.updateUser);
 
-/**
- * @route   PUT /api/users/:id
- * @desc    Update user
- * @access  Private (Admin only)
- */
-router.put('/:id', authenticateToken, adminOnly, validateIdParam, userController.updateUser);
-
-/**
- * @route   DELETE /api/users/:id
- * @desc    Delete user
- * @access  Private (Admin only)
- */
-router.delete('/:id', authenticateToken, adminOnly, validateIdParam, userController.deleteUser);
+// Delete user (Admin only)
+router.delete('/:id', authorize(['Admin']), userController.deleteUser);
 
 module.exports = router;
