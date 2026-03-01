@@ -18,7 +18,8 @@ const sendSMS = async (toPhone, message) => {
 };
 
 const sendAppointmentReminderSMS = async (ownerPhone, ownerName, petName, appointmentDate, appointmentTime) => {
-  const message = `PetCare Plus: Hi ${ownerName}, reminder for ${petName}'s appointment on ${appointmentDate} at ${appointmentTime}. Reply CANCEL to cancel. Call 0112345678 for help.`;
+  const clinicPhone = process.env.CLINIC_PHONE_NUMBER || '0112345678';
+  const message = `PetCare Plus: Hi ${ownerName}, reminder for ${petName}'s appointment on ${appointmentDate} at ${appointmentTime}. Reply CANCEL to cancel. Call ${clinicPhone} for help.`;
   return sendSMS(ownerPhone, message);
 };
 
@@ -28,7 +29,8 @@ const sendVaccinationReminderSMS = async (ownerPhone, ownerName, petName, vaccin
 };
 
 const sendPaymentReminderSMS = async (ownerPhone, ownerName, invoiceNumber, amount) => {
-  const message = `PetCare Plus: Hi ${ownerName}, Invoice #${invoiceNumber} for LKR ${amount} is pending. Please visit clinic or call 0112345678.`;
+  const clinicPhone = process.env.CLINIC_PHONE_NUMBER || '0112345678';
+  const message = `PetCare Plus: Hi ${ownerName}, Invoice #${invoiceNumber} for LKR ${amount} is pending. Please visit clinic or call ${clinicPhone}.`;
   return sendSMS(ownerPhone, message);
 };
 

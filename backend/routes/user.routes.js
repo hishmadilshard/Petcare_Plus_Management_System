@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/user.controller');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
+const { apiLimiter } = require('../middleware/rateLimiter');
 
-// All routes require authentication
+// All routes require authentication and rate limiting
+router.use(apiLimiter);
 router.use(authenticate);
 
 // Get all users (Admin only)

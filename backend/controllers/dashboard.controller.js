@@ -13,7 +13,7 @@ const getAdminDashboard = async (req, res) => {
     );
 
     const [recentActivity] = await db.query(
-      `SELECT 'appointment' AS type, CONCAT(p.name, ' appointment') AS description, a.created_at AS date
+      `SELECT 'appointment' AS type, CONCAT(p.pet_name, ' appointment') AS description, a.created_at AS date
        FROM appointments a JOIN pets p ON a.pet_id = p.pet_id
        ORDER BY a.created_at DESC LIMIT 5`
     );
