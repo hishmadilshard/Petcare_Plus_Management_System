@@ -122,5 +122,53 @@ module.exports = {
   validateChangePassword,
   validateUser,
   validatePetOwner,
-  validatePet
+  validatePet,
+  // Simple pass-through validators for routes that need them
+  validateAppointment: (req, res, next) => {
+    const { pet_id, appointment_date, service_type } = req.body;
+    if (!pet_id) return res.status(400).json({ success: false, message: 'Pet ID is required' });
+    if (!appointment_date) return res.status(400).json({ success: false, message: 'Appointment date is required' });
+    if (!service_type) return res.status(400).json({ success: false, message: 'Service type is required' });
+    next();
+  },
+  validateMedicalRecord: (req, res, next) => {
+    const { pet_id, diagnosis } = req.body;
+    if (!pet_id) return res.status(400).json({ success: false, message: 'Pet ID is required' });
+    if (!diagnosis) return res.status(400).json({ success: false, message: 'Diagnosis is required' });
+    next();
+  },
+  validateVaccination: (req, res, next) => {
+    const { pet_id, vaccine_name, given_date } = req.body;
+    if (!pet_id) return res.status(400).json({ success: false, message: 'Pet ID is required' });
+    if (!vaccine_name) return res.status(400).json({ success: false, message: 'Vaccine name is required' });
+    if (!given_date) return res.status(400).json({ success: false, message: 'Given date is required' });
+    next();
+  },
+  validateInvoice: (req, res, next) => {
+    const { owner_id, total_amount } = req.body;
+    if (!owner_id) return res.status(400).json({ success: false, message: 'Owner ID is required' });
+    if (!total_amount) return res.status(400).json({ success: false, message: 'Total amount is required' });
+    next();
+  },
+  validateIdParam: (req, res, next) => {
+    const { id, petId } = req.params;
+    const paramId = id || petId;
+    if (paramId && isNaN(parseInt(paramId))) {
+      return res.status(400).json({ success: false, message: 'Invalid ID parameter' });
+    }
+    next();
+  },
+  validatePagination: (req, res, next) => {
+    const { page, limit } = req.query;
+    if (page && isNaN(parseInt(page))) return res.status(400).json({ success: false, message: 'Invalid page number' });
+    if (limit && isNaN(parseInt(limit))) return res.status(400).json({ success: false, message: 'Invalid limit number' });
+    next();
+  },
+  validateDateRange: (req, res, next) => {
+    const { startDate, endDate } = req.query;
+    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+      return res.status(400).json({ success: false, message: 'Start date must be before end date' });
+    }
+    next();
+  }
 };
