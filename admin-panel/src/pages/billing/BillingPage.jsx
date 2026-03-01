@@ -150,9 +150,10 @@ const BillingPage = () => {
     }
   };
 
-  const filteredInvoices = invoices.filter((inv) => {
+  const filteredInvoices = invoices.filter((invoice) => {
     if (statusFilter === 'All') return true;
-    return inv.status === statusFilter;
+    const paymentStatus = invoice.payment_status || invoice.status;
+    return paymentStatus === statusFilter;
   });
 
   const formatCurrency = (val) => {
@@ -204,7 +205,7 @@ const BillingPage = () => {
                 <Typography variant="caption" color="text.secondary">This Month</Typography>
               </Box>
               <Typography variant="h5" fontWeight="bold" color="success.main">
-                {formatCurrency(stats.month_revenue)}
+                {formatCurrency(stats.revenue_this_month)}
               </Typography>
             </CardContent>
           </Card>
@@ -294,23 +295,24 @@ const BillingPage = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredInvoices.map((inv) => {
-                    const id = inv.invoice_id || inv.id;
+                  filteredInvoices.map((invoice) => {
+                    const id = invoice.invoice_id || invoice.id;
+                    const paymentStatus = invoice.payment_status || invoice.status;
                     return (
                       <TableRow key={id} hover>
                         <TableCell>
                           <Typography variant="body2" fontWeight={600}>#{id}</Typography>
                         </TableCell>
-                        <TableCell>{inv.owner_name || `Owner #${inv.owner_id}`}</TableCell>
-                        <TableCell>{formatDate(inv.created_at || inv.invoice_date)}</TableCell>
+                        <TableCell>{invoice.owner_name || `Owner #${invoice.owner_id}`}</TableCell>
+                        <TableCell>{formatDate(invoice.created_at || invoice.invoice_date)}</TableCell>
                         <TableCell>
                           <Typography variant="body2" fontWeight={600}>
-                            {formatCurrency(inv.total_amount)}
+                            {formatCurrency(invoice.total_amount)}
                           </Typography>
                         </TableCell>
-                        <TableCell>{getStatusChip(inv.status)}</TableCell>
+                        <TableCell>{getStatusChip(paymentStatus)}</TableCell>
                         <TableCell align="right">
-                          {inv.status !== 'Paid' && (
+                          {paymentStatus !== 'Paid' && (
                             <Tooltip title="Mark as Paid">
                               <IconButton
                                 color="success"
