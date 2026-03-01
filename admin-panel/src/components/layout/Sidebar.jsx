@@ -26,7 +26,11 @@ import {
   Logout,
   ChevronLeft,
   ChevronRight,
-  MedicalServices
+  MedicalServices,
+  Vaccines,
+  Receipt,
+  Inventory2,
+  ManageAccounts
 } from '@mui/icons-material';
 
 const drawerWidth = 280;
@@ -36,7 +40,6 @@ const Sidebar = ({ open, onClose, collapsed, onToggleCollapse }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Get user info from localStorage
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const userRole = user.role || 'Admin';
   const userName = user.full_name || user.email || 'User';
@@ -52,7 +55,6 @@ const Sidebar = ({ open, onClose, collapsed, onToggleCollapse }) => {
     if (onClose) onClose();
   };
 
-  // Define menu items based on user role
   const getMenuItems = () => {
     return [
       {
@@ -86,9 +88,33 @@ const Sidebar = ({ open, onClose, collapsed, onToggleCollapse }) => {
         roles: ['Admin', 'Veterinarian']
       },
       {
+        title: 'Vaccinations',
+        icon: <Vaccines />,
+        path: '/vaccinations',
+        roles: ['Admin', 'Veterinarian', 'Receptionist']
+      },
+      {
+        title: 'Billing',
+        icon: <Receipt />,
+        path: '/billing',
+        roles: ['Admin', 'Receptionist']
+      },
+      {
+        title: 'Inventory',
+        icon: <Inventory2 />,
+        path: '/inventory',
+        roles: ['Admin', 'Receptionist']
+      },
+      {
         title: 'Veterinarians',
         icon: <LocalHospital />,
         path: '/veterinarians',
+        roles: ['Admin']
+      },
+      {
+        title: 'Users',
+        icon: <ManageAccounts />,
+        path: '/users',
         roles: ['Admin']
       },
       {
@@ -109,148 +135,72 @@ const Sidebar = ({ open, onClose, collapsed, onToggleCollapse }) => {
   const menuItems = getMenuItems();
 
   const isActive = (path) => {
-    if (path === '/pets') {
-      return location.pathname === '/pets' || location.pathname.startsWith('/pets/');
-    }
-    if (path === '/pet-owners') {
-      return location.pathname === '/pet-owners' || location.pathname.startsWith('/pet-owners/');
-    }
+    if (path === '/pets') return location.pathname === '/pets' || location.pathname.startsWith('/pets/');
+    if (path === '/pet-owners') return location.pathname === '/pet-owners' || location.pathname.startsWith('/pet-owners/');
     return location.pathname === path;
   };
 
   const drawerContent = (
-    <Box
-      sx={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        background: 'linear-gradient(180deg, #001f3f 0%, #003366 100%)',
-        color: 'white'
-      }}
-    >
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'linear-gradient(180deg, #001f3f 0%, #003366 100%)', color: 'white' }}>
       {/* Header */}
-      <Box
-        sx={{
-          p: collapsed ? 2 : 3,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: collapsed ? 'center' : 'space-between',
-          borderBottom: '1px solid rgba(255,255,255,0.1)'
-        }}
-      >
+      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
         {!collapsed && (
-          <Box display="flex" alignItems="center" gap={2}>
-            <Avatar
-              sx={{
-                bgcolor: 'white',
-                color: '#001f3f',
-                width: 45,
-                height: 45,
-                fontWeight: 700
-              }}
-            >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Avatar sx={{ bgcolor: 'white', color: '#001f3f', width: 40, height: 40 }}>
               <Pets />
             </Avatar>
             <Box>
-              <Typography variant="h6" fontWeight="700">
-                PetCare Plus
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                Management System
-              </Typography>
+              <Typography variant="subtitle1" fontWeight="bold" color="white">PetCare Plus</Typography>
+              <Typography variant="caption" color="rgba(255,255,255,0.6)">Management System</Typography>
             </Box>
           </Box>
         )}
-        {collapsed && (
-          <Avatar
-            sx={{
-              bgcolor: 'white',
-              color: '#001f3f',
-              width: 45,
-              height: 45
-            }}
-          >
-            <Pets />
-          </Avatar>
+        {onToggleCollapse && (
+          <IconButton onClick={onToggleCollapse} sx={{ color: 'white', ml: collapsed ? 'auto' : 0 }}>
+            {collapsed ? <ChevronRight /> : <ChevronLeft />}
+          </IconButton>
         )}
       </Box>
 
-      {/* User Profile */}
-      <Box
-        sx={{
-          p: collapsed ? 2 : 3,
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
-          textAlign: collapsed ? 'center' : 'left'
-        }}
-      >
-        <Box display="flex" alignItems="center" gap={2} justifyContent={collapsed ? 'center' : 'flex-start'}>
-          <Avatar
-            sx={{
-              bgcolor: alpha('#fff', 0.2),
-              width: collapsed ? 40 : 50,
-              height: collapsed ? 40 : 50,
-              border: '2px solid white',
-              fontWeight: 700
-            }}
-          >
-            {userName.charAt(0)}
-          </Avatar>
-          {!collapsed && (
-            <Box flex={1}>
-              <Typography variant="body1" fontWeight="600" noWrap>
-                {userName}
-              </Typography>
-              <Chip
-                label={userRole}
-                size="small"
-                sx={{
-                  bgcolor: alpha('#fff', 0.2),
-                  color: 'white',
-                  fontWeight: 600,
-                  fontSize: '0.7rem',
-                  height: 22,
-                  mt: 0.5
-                }}
-              />
+      {/* User Info */}
+      {!collapsed && (
+        <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.08)' }}>
+            <Avatar sx={{ bgcolor: '#0ea5e9', width: 36, height: 36, fontSize: '0.9rem' }}>
+              {userName.charAt(0).toUpperCase()}
+            </Avatar>
+            <Box sx={{ overflow: 'hidden' }}>
+              <Typography variant="body2" fontWeight="600" color="white" noWrap>{userName}</Typography>
+              <Chip label={userRole} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.15)', color: 'white', fontSize: '0.65rem', height: 18 }} />
             </Box>
-          )}
+          </Box>
         </Box>
-      </Box>
+      )}
 
       {/* Menu Items */}
-      <List sx={{ flex: 1, py: 2, overflowY: 'auto', overflowX: 'hidden' }}>
-        {menuItems.map((item, index) => (
-          <ListItem key={index} disablePadding sx={{ px: collapsed ? 1 : 2, mb: 0.5 }}>
+      <List sx={{ flex: 1, px: 1.5, py: 2, overflowY: 'auto' }}>
+        {menuItems.map((item) => (
+          <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
             <ListItemButton
               onClick={() => handleNavigation(item.path)}
               sx={{
                 borderRadius: 2,
-                minHeight: 48,
+                py: 1.2,
+                px: collapsed ? 1.5 : 2,
                 justifyContent: collapsed ? 'center' : 'flex-start',
-                px: collapsed ? 0 : 2,
-                bgcolor: isActive(item.path) ? alpha('#fff', 0.15) : 'transparent',
-                '&:hover': {
-                  bgcolor: alpha('#fff', 0.1)
-                },
+                bgcolor: isActive(item.path) ? 'rgba(255,255,255,0.15)' : 'transparent',
+                borderLeft: isActive(item.path) ? '3px solid #0ea5e9' : '3px solid transparent',
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
                 transition: 'all 0.2s'
               }}
             >
-              <ListItemIcon
-                sx={{
-                  color: 'white',
-                  minWidth: collapsed ? 'auto' : 40,
-                  justifyContent: 'center'
-                }}
-              >
+              <ListItemIcon sx={{ color: isActive(item.path) ? '#0ea5e9' : 'rgba(255,255,255,0.7)', minWidth: collapsed ? 0 : 40 }}>
                 {item.icon}
               </ListItemIcon>
               {!collapsed && (
                 <ListItemText
                   primary={item.title}
-                  primaryTypographyProps={{
-                    fontSize: '0.95rem',
-                    fontWeight: isActive(item.path) ? 600 : 500
-                  }}
+                  primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: isActive(item.path) ? 600 : 400, color: isActive(item.path) ? 'white' : 'rgba(255,255,255,0.7)' }}
                 />
               )}
             </ListItemButton>
@@ -258,104 +208,31 @@ const Sidebar = ({ open, onClose, collapsed, onToggleCollapse }) => {
         ))}
       </List>
 
-      <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
-
-      {/* Logout Button */}
-      <Box sx={{ p: collapsed ? 1 : 2 }}>
+      {/* Logout */}
+      <Box sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
         <ListItemButton
           onClick={handleLogout}
-          sx={{
-            borderRadius: 2,
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            px: collapsed ? 0 : 2,
-            bgcolor: alpha('#fff', 0.05),
-            '&:hover': {
-              bgcolor: alpha('#fff', 0.1)
-            }
-          }}
+          sx={{ borderRadius: 2, py: 1.2, px: 2, justifyContent: collapsed ? 'center' : 'flex-start', '&:hover': { bgcolor: 'rgba(255,0,0,0.15)' } }}
         >
-          <ListItemIcon
-            sx={{
-              color: 'white',
-              minWidth: collapsed ? 'auto' : 40,
-              justifyContent: 'center'
-            }}
-          >
+          <ListItemIcon sx={{ color: 'rgba(255,255,255,0.7)', minWidth: collapsed ? 0 : 40 }}>
             <Logout />
           </ListItemIcon>
-          {!collapsed && (
-            <ListItemText
-              primary="Logout"
-              primaryTypographyProps={{
-                fontSize: '0.95rem',
-                fontWeight: 600
-              }}
-            />
-          )}
+          {!collapsed && <ListItemText primary="Logout" primaryTypographyProps={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.7)' }} />}
         </ListItemButton>
       </Box>
-
-      {/* Collapse Toggle */}
-      {onToggleCollapse && (
-        <Box
-          sx={{
-            p: 1,
-            display: 'flex',
-            justifyContent: 'center',
-            borderTop: '1px solid rgba(255,255,255,0.1)'
-          }}
-        >
-          <IconButton
-            onClick={onToggleCollapse}
-            sx={{
-              color: 'white',
-              '&:hover': {
-                bgcolor: alpha('#fff', 0.1)
-              }
-            }}
-          >
-            {collapsed ? <ChevronRight /> : <ChevronLeft />}
-          </IconButton>
-        </Box>
-      )}
     </Box>
   );
 
   return (
     <>
-      {/* Desktop Drawer */}
-      <Drawer
-        variant="permanent"
-        sx={{
-          display: { xs: 'none', md: 'block' },
-          width: collapsed ? collapsedWidth : drawerWidth,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: collapsed ? collapsedWidth : drawerWidth,
-            boxSizing: 'border-box',
-            border: 'none',
-            transition: 'width 0.3s ease'
-          }
-        }}
-      >
+      {/* Mobile Drawer */}
+      <Drawer variant="temporary" open={open} onClose={onClose} ModalProps={{ keepMounted: true }}
+        sx={{ display: { xs: 'block', sm: 'none' }, '& .MuiDrawer-paper': { width: drawerWidth, boxSizing: 'border-box', border: 'none' } }}>
         {drawerContent}
       </Drawer>
-
-      {/* Mobile Drawer */}
-      <Drawer
-        variant="temporary"
-        open={open}
-        onClose={onClose}
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          display: { xs: 'block', md: 'none' },
-          '& .MuiDrawer-paper': {
-            width: drawerWidth,
-            boxSizing: 'border-box',
-            border: 'none'
-          }
-        }}
-      >
+      {/* Desktop Drawer */}
+      <Drawer variant="permanent"
+        sx={{ display: { xs: 'none', sm: 'block' }, '& .MuiDrawer-paper': { width: collapsed ? collapsedWidth : drawerWidth, boxSizing: 'border-box', border: 'none', transition: 'width 0.3s', overflow: 'hidden' } }}>
         {drawerContent}
       </Drawer>
     </>
