@@ -1,7 +1,6 @@
-CREATE DATABASE IF NOT EXISTS petcare_plus_db;
+﻿CREATE DATABASE IF NOT EXISTS petcare_plus_db;
 USE petcare_plus_db;
 
--- Users table
 CREATE TABLE IF NOT EXISTS users (
   user_id INT PRIMARY KEY AUTO_INCREMENT,
   email VARCHAR(255) UNIQUE NOT NULL,
@@ -14,7 +13,6 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Pet owners table
 CREATE TABLE IF NOT EXISTS pet_owners (
   owner_id INT PRIMARY KEY AUTO_INCREMENT,
   full_name VARCHAR(255) NOT NULL,
@@ -29,7 +27,6 @@ CREATE TABLE IF NOT EXISTS pet_owners (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Pets table
 CREATE TABLE IF NOT EXISTS pets (
   pet_id INT PRIMARY KEY AUTO_INCREMENT,
   owner_id INT NOT NULL,
@@ -50,20 +47,10 @@ CREATE TABLE IF NOT EXISTS pets (
   FOREIGN KEY (owner_id) REFERENCES pet_owners(owner_id) ON DELETE CASCADE
 );
 
--- Insert default admin user
 INSERT INTO users (email, password, role, full_name, status)
-VALUES (
-  'admin@petcareplus.lk',
-  '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGQMQX0KoOKJT3TTs6YqGKW',
-  'Admin',
-  'System Administrator',
-  'Active'
-);
+VALUES ('admin@petcareplus.lk', '.ZQ4/zo1G.q1lRps.9cGQMQX0KoOKJT3TTs6YqGKW', 'Admin', 'System Administrator', 'Active');
 
--- Insert sample pet owners
 INSERT INTO pet_owners (full_name, email, phone, address, city) VALUES
 ('John Smith', 'john.smith@email.com', '0771234567', '123 Main Street', 'Colombo'),
 ('Emma Wilson', 'emma.wilson@email.com', '0772345678', '456 Lake Road', 'Kandy'),
 ('Mike Brown', 'mike.brown@email.com', '0773456789', '789 Hill View', 'Galle');
-
-SELECT 'Database created successfully!' as message;

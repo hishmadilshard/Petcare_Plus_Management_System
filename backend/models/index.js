@@ -1,43 +1,62 @@
-const { sequelize } = require('../config/db.config');
-const { DataTypes } = require('sequelize');
+const fs = require('fs');
+const path = require('path');
+const Sequelize = require('sequelize');
+const db = require('../config/database');
+
+
+
+const env = process.env.NODE_ENV || 'development';
+const dbConfig = config[env];
+
+// Create Sequelize instance
+const sequelize = new Sequelize(
+  dbConfig.database,
+  dbConfig.username,
+  dbConfig.password,
+  {
+    host: dbConfig.host,
+    port: dbConfig.port,
+    dialect: dbConfig.dialect,
+    dialectOptions: dbConfig.dialectOptions || {},
+    pool: dbConfig.pool || {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    },
+    logging: dbConfig.logging || false,
+    define: {
+      timestamps: true,
+      underscored: false,
+      freezeTableName: true
+    }
+  }
+);
+
+const db = {};
 
 // Import all models
-const User = require('./user.model');
-const PetOwner = require('./petOwner.model');
-const Pet = require('./pet.model');
-const Appointment = require('./appointment.model');
-const MedicalRecord = require('./medicalRecord.model');
-const Vaccination = require('./vaccination.model');
-const Inventory = require('./inventory.model');
-const Invoice = require('./invoice.model');
-const InvoiceItem = require('./invoiceItem.model');
-const Notification = require('./notification.model');
-const RefreshToken = require('./refreshToken.model');
+fs.readdirSync(__dirname)
+  .filter(file => {
+    return (
+      file.indexOf('.') !== 0 &&
+      file !== 'index.js' &&
+      file.slice(-3) === '.js'
+    );
+  })
+  .forEach(file => {
+    const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
+    db[model.name] = model;
+  });
 
-// Initialize models
-const models = {
-  User: User(sequelize, DataTypes),
-  PetOwner: PetOwner(sequelize, DataTypes),
-  Pet: Pet(sequelize, DataTypes),
-  Appointment: Appointment(sequelize, DataTypes),
-  MedicalRecord: MedicalRecord(sequelize, DataTypes),
-  Vaccination: Vaccination(sequelize, DataTypes),
-  Inventory: Inventory(sequelize, DataTypes),
-  Invoice: Invoice(sequelize, DataTypes),
-  InvoiceItem: InvoiceItem(sequelize, DataTypes),
-  Notification: Notification(sequelize, DataTypes),
-  RefreshToken: RefreshToken(sequelize, DataTypes)
-};
-
-// Define relationships
-Object.keys(models).forEach(modelName => {
-  if (models[modelName].associate) {
-    models[modelName].associate(models);
+// Set up associations
+Object.keys(db).forEach(modelName => {
+  if (db[modelName].associate) {
+    db[modelName].associate(db);
   }
 });
 
-// Export models and sequelize
-module.exports = {
-  sequelize,
-  ...models
-};
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
+
+module.exports = db;

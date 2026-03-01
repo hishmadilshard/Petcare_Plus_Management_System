@@ -1,35 +1,17 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
+import { Box, AppBar, Toolbar, IconButton, Typography, Avatar, Menu, MenuItem, Drawer } from '@mui/material';
+import { Menu as MenuIcon, Logout, AccountCircle } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
-import {
-  Box,
-  Drawer,
-  AppBar,
-  Toolbar,
-  Typography,
-  IconButton,
-  Avatar,
-  Menu,
-  MenuItem,
-  Divider,
-  ListItemIcon,
-  Badge,
-  Tooltip
-} from '@mui/material';
-import {
-  Menu as MenuIcon,
-  Logout,
-  Person,
-  Notifications,
-  Settings
-} from '@mui/icons-material';
 import Sidebar from './Sidebar';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 
-const DRAWER_WIDTH = 260;
+const DRAWER_WIDTH = 280;
 
 const MainLayout = () => {
-  const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
 
@@ -37,7 +19,7 @@ const MainLayout = () => {
     setMobileOpen(!mobileOpen);
   };
 
-  const handleProfileMenuOpen = (event) => {
+  const handleMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
   };
 
@@ -45,28 +27,29 @@ const MainLayout = () => {
     setAnchorEl(null);
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     handleMenuClose();
-    await logout();
+    logout();
+    toast.success('Logged out successfully');
     navigate('/login');
   };
 
   const handleProfile = () => {
     handleMenuClose();
-    navigate('/profile');
+    navigate('/settings');
   };
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       {/* App Bar */}
       <AppBar
         position="fixed"
         sx={{
           width: { sm: `calc(100% - ${DRAWER_WIDTH}px)` },
           ml: { sm: `${DRAWER_WIDTH}px` },
-          bgcolor: 'white',
-          color: 'text.primary',
-          boxShadow: 1
+          backgroundColor: '#ffffff',
+          color: '#1e293b',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
         }}
       >
         <Toolbar>
@@ -79,107 +62,82 @@ const MainLayout = () => {
             <MenuIcon />
           </IconButton>
 
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {user?.role === 'Admin' && 'Admin Dashboard'}
-            {user?.role === 'Vet' && 'Veterinarian Dashboard'}
-            {user?.role === 'Receptionist' && 'Reception Dashboard'}
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
+            PetCare Plus Management
           </Typography>
 
-          {/* Notifications */}
-          <Tooltip title="Notifications">
-            <IconButton color="inherit" sx={{ mr: 1 }}>
-              <Badge badgeContent={3} color="error">
-                <Notifications />
-              </Badge>
-            </IconButton>
-          </Tooltip>
-
-          {/* Settings */}
-          <Tooltip title="Settings">
-            <IconButton color="inherit" sx={{ mr: 1 }}>
-              <Settings />
-            </IconButton>
-          </Tooltip>
-
           {/* User Menu */}
-          <Tooltip title="Account">
-            <IconButton onClick={handleProfileMenuOpen} sx={{ ml: 1 }}>
-              <Avatar
-                sx={{ bgcolor: 'primary.main' }}
-                alt={user?.full_name}
-                src={user?.profile_image}
-              >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: { xs: 'none', md: 'block' }, textAlign: 'right' }}>
+              <Typography variant="body2" fontWeight="600">
+                {user?.full_name}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {user?.role}
+              </Typography>
+            </Box>
+            <IconButton onClick={handleMenuOpen}>
+              <Avatar sx={{ bgcolor: '#1e3a8a', width: 40, height: 40 }}>
                 {user?.full_name?.charAt(0)}
               </Avatar>
             </IconButton>
-          </Tooltip>
+          </Box>
 
           <Menu
             anchorEl={anchorEl}
             open={Boolean(anchorEl)}
             onClose={handleMenuClose}
-            transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-            anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
           >
-            <Box sx={{ px: 2, py: 1.5 }}>
-              <Typography variant="subtitle1" fontWeight="bold">
-                {user?.full_name}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {user?.email}
-              </Typography>
-              <Typography variant="caption" display="block" color="primary">
-                {user?.role}
-              </Typography>
-            </Box>
-            <Divider />
             <MenuItem onClick={handleProfile}>
-              <ListItemIcon>
-                <Person fontSize="small" />
-              </ListItemIcon>
-              My Profile
+              <AccountCircle sx={{ mr: 1 }} /> Profile
             </MenuItem>
             <MenuItem onClick={handleLogout}>
-              <ListItemIcon>
-                <Logout fontSize="small" />
-              </ListItemIcon>
-              Logout
+              <Logout sx={{ mr: 1 }} /> Logout
             </MenuItem>
           </Menu>
         </Toolbar>
       </AppBar>
 
-      {/* Sidebar Drawer */}
+      {/* Sidebar - Mobile Drawer */}
       <Box
         component="nav"
         sx={{ width: { sm: DRAWER_WIDTH }, flexShrink: { sm: 0 } }}
       >
-        {/* Mobile drawer */}
         <Drawer
           variant="temporary"
           open={mobileOpen}
           onClose={handleDrawerToggle}
-          ModalProps={{ keepMounted: true }}
+          ModalProps={{
+            keepMounted: true, // Better mobile performance
+          }}
           sx={{
             display: { xs: 'block', sm: 'none' },
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
-              width: DRAWER_WIDTH
-            }
+              width: DRAWER_WIDTH,
+            },
           }}
         >
           <Sidebar />
         </Drawer>
 
-        {/* Desktop drawer */}
+        {/* Sidebar - Desktop Permanent */}
         <Drawer
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
-              width: DRAWER_WIDTH
-            }
+              width: DRAWER_WIDTH,
+            },
           }}
           open
         >
@@ -194,8 +152,8 @@ const MainLayout = () => {
           flexGrow: 1,
           p: 3,
           width: { sm: `calc(100% - ${DRAWER_WIDTH}px)` },
-          minHeight: '100vh',
-          bgcolor: '#f5f5f5'
+          backgroundColor: '#f8fafc',
+          minHeight: '100vh'
         }}
       >
         <Toolbar /> {/* Spacer for AppBar */}

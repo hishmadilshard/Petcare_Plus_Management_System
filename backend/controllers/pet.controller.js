@@ -1,149 +1,94 @@
-const { Pet, PetOwner, User, Appointment, MedicalRecord, Vaccination } = require('../models');
-const { success, error, notFound } = require('../utils/responseHandler');
-const securityLogger = require('../utils/securityLogger');
-const { generatePetQRCode } = require('../utils/qrGenerator');
-const { Op } = require('sequelize');
+const db = require('../config/database');
 
-/**
- * Get all pets
- * GET /api/pets
- */
+// Get all pets
 const getAllPets = async (req, res) => {
   try {
-    const { page = 1, limit = 10, species, status, ownerId, search } = req.query;
-    const offset = (page - 1) * limit;
+    const [pets] = await db.query(`
+      SELECT 
+        p.*,
+        po.full_name as owner_name,
+        po.email as owner_email,
+        po.phone as owner_phone,
+        po.address as owner_address
+      FROM pets p
+      LEFT JOIN pet_owners po ON p.owner_id = po.owner_id
+      ORDER BY p.created_at DESC
+    `);
 
-    // Build where clause
-    const where = {};
-    if (species) where.species = species;
-    if (status) where.status = status;
-    if (ownerId) where.owner_id = ownerId;
-    if (search) {
-      where[Op.or] = [
-        { pet_name: { [Op.like]: `%${search}%` } },
-        { breed: { [Op.like]: `%${search}%` } },
-        { microchip_id: { [Op.like]: `%${search}%` } }
-      ];
-    }
-
-    // If user is Owner, only show their pets
-    if (req.user.role === 'Owner') {
-      const owner = await PetOwner.findOne({ where: { user_id: req.user.id } });
-      if (owner) {
-        where.owner_id = owner.owner_id;
+    res.status(200).json({
+      success: true,
+      count: pets.length,
+      data: {
+        pets: pets.map(pet => ({
+          ...pet,
+          owner: {
+            full_name: pet.owner_name,
+            email: pet.owner_email,
+            phone: pet.owner_phone,
+            address: pet.owner_address
+          }
+        }))
       }
-    }
-
-    const { count, rows: pets } = await Pet.findAndCountAll({
-      where,
-      include: [
-        {
-          model: PetOwner,
-          as: 'owner',
-          attributes: ['owner_id', 'user_id'],
-          include: [
-            {
-              model: User,
-              as: 'user',
-              attributes: ['user_id', 'full_name', 'email', 'phone']
-            }
-          ]
-        }
-      ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [['created_at', 'DESC']]
     });
-
-    return success(res, {
-      pets,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / limit)
-      }
-    }, 'Pets retrieved successfully');
-
-  } catch (err) {
-    securityLogger.error('Get all pets error', { error: err.message });
-    return error(res, 'Failed to retrieve pets', 500);
+  } catch (error) {
+    console.error('Error fetching pets:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pets',
+      error: error.message
+    });
   }
 };
 
-/**
- * Get pet by ID
- * GET /api/pets/:id
- */
+// Get pet by ID
 const getPetById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const pet = await Pet.findByPk(id, {
-      include: [
-        {
-          model: PetOwner,
-          as: 'owner',
-          include: [
-            {
-              model: User,
-              as: 'user',
-              attributes: ['user_id', 'full_name', 'email', 'phone']
-            }
-          ]
-        },
-        {
-          model: Appointment,
-          as: 'appointments',
-          limit: 5,
-          order: [['appointment_date', 'DESC']],
-          include: [
-            {
-              model: User,
-              as: 'veterinarian',
-              attributes: ['user_id', 'full_name']
-            }
-          ]
-        },
-        {
-          model: MedicalRecord,
-          as: 'medicalRecords',
-          limit: 5,
-          order: [['record_date', 'DESC']],
-          include: [
-            {
-              model: User,
-              as: 'veterinarian',
-              attributes: ['user_id', 'full_name']
-            }
-          ]
-        },
-        {
-          model: Vaccination,
-          as: 'vaccinations',
-          order: [['given_date', 'DESC']]
-        }
-      ]
-    });
+    const [pets] = await db.query(`
+      SELECT 
+        p.*,
+        po.full_name as owner_name,
+        po.email as owner_email,
+        po.phone as owner_phone,
+        po.address as owner_address
+      FROM pets p
+      LEFT JOIN pet_owners po ON p.owner_id = po.owner_id
+      WHERE p.pet_id = ?
+    `, [id]);
 
-    if (!pet) {
-      return notFound(res, 'Pet');
+    if (pets.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pet not found'
+      });
     }
 
-    securityLogger.logDataAccess(req.user.id, 'Pet', id, 'READ');
+    const pet = pets[0];
 
-    return success(res, { pet }, 'Pet retrieved successfully');
-
-  } catch (err) {
-    securityLogger.error('Get pet by ID error', { error: err.message, petId: req.params.id });
-    return error(res, 'Failed to retrieve pet', 500);
+    res.status(200).json({
+      success: true,
+      data: {
+        ...pet,
+        owner: {
+          full_name: pet.owner_name,
+          email: pet.owner_email,
+          phone: pet.owner_phone,
+          address: pet.owner_address
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching pet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pet',
+      error: error.message
+    });
   }
 };
 
-/**
- * Create new pet
- * POST /api/pets
- */
+// Create new pet
 const createPet = async (req, res) => {
   try {
     const {
@@ -151,270 +96,138 @@ const createPet = async (req, res) => {
       pet_name,
       species,
       breed,
-      age,
       date_of_birth,
       gender,
-      weight,
       color,
-      microchip_id,
-      special_notes,
-      allergies
+      weight,
+      microchip_number,
+      medical_conditions,
+      allergies,
+      current_medications,
+      special_notes
     } = req.body;
 
-    // If user is Owner, use their owner_id
-    let finalOwnerId = owner_id;
-    if (req.user.role === 'Owner') {
-      const owner = await PetOwner.findOne({ where: { user_id: req.user.id } });
-      if (!owner) {
-        return res.status(400).json({
-          success: false,
-          message: 'Owner profile not found',
-          timestamp: new Date().toISOString()
-        });
-      }
-      finalOwnerId = owner.owner_id;
-    }
-
-    // Verify owner exists
-    const ownerExists = await PetOwner.findByPk(finalOwnerId);
-    if (!ownerExists) {
-      return res.status(404).json({
+    // Validate required fields
+    if (!owner_id || !pet_name || !species) {
+      return res.status(400).json({
         success: false,
-        message: 'Owner not found',
-        timestamp: new Date().toISOString()
+        message: 'Owner, pet name, and species are required'
       });
     }
 
-    // Create pet
-    const pet = await Pet.create({
-      owner_id: finalOwnerId,
-      pet_name,
-      species,
-      breed,
-      age,
-      date_of_birth,
-      gender,
-      weight,
-      color,
-      microchip_id,
-      special_notes,
-      allergies,
-      status: 'Active'
-    });
-
-    // Generate QR code
-    try {
-      const qrResult = await generatePetQRCode(pet.pet_id, finalOwnerId, pet_name);
-      await Pet.update(
-        { qr_code: qrResult.qrIdentifier },
-        { where: { pet_id: pet.pet_id } }
-      );
-      pet.qr_code = qrResult.qrIdentifier;
-    } catch (qrError) {
-      console.error('QR generation failed:', qrError);
-      // Continue without QR code
-    }
-
-    // Reload with associations
-    const createdPet = await Pet.findByPk(pet.pet_id, {
-      include: [
-        {
-          model: PetOwner,
-          as: 'owner',
-          include: [{ model: User, as: 'user', attributes: ['full_name', 'email'] }]
-        }
+    const [result] = await db.query(
+      `INSERT INTO pets (
+        owner_id, pet_name, species, breed, date_of_birth, 
+        gender, color, weight, microchip_number, medical_conditions,
+        allergies, current_medications, special_notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        owner_id, pet_name, species, breed, date_of_birth,
+        gender, color, weight, microchip_number, medical_conditions,
+        allergies, current_medications, special_notes
       ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Pet registered successfully',
+      data: {
+        pet_id: result.insertId,
+        owner_id,
+        pet_name,
+        species
+      }
     });
-
-    securityLogger.info('Pet created', {
-      createdBy: req.user.id,
-      petId: pet.pet_id,
-      ownerId: finalOwnerId
+  } catch (error) {
+    console.error('Error creating pet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to register pet',
+      error: error.message
     });
-
-    return success(res, { pet: createdPet }, 'Pet registered successfully', 201);
-
-  } catch (err) {
-    securityLogger.error('Create pet error', { error: err.message });
-    return error(res, 'Failed to register pet', 500);
   }
 };
 
-/**
- * Update pet
- * PUT /api/pets/:id
- */
+// Update pet
 const updatePet = async (req, res) => {
   try {
     const { id } = req.params;
     const {
+      owner_id,
       pet_name,
       species,
       breed,
-      age,
       date_of_birth,
       gender,
-      weight,
       color,
-      microchip_id,
-      special_notes,
+      weight,
+      microchip_number,
+      medical_conditions,
       allergies,
-      status
+      current_medications,
+      special_notes
     } = req.body;
 
-    const pet = await Pet.findByPk(id);
-    if (!pet) {
-      return notFound(res, 'Pet');
-    }
-
-    // Update pet
-    await Pet.update(
-      {
-        pet_name,
-        species,
-        breed,
-        age,
-        date_of_birth,
-        gender,
-        weight,
-        color,
-        microchip_id,
-        special_notes,
-        allergies,
-        status
-      },
-      { where: { pet_id: id } }
+    const [result] = await db.query(
+      `UPDATE pets SET
+        owner_id = ?, pet_name = ?, species = ?, breed = ?,
+        date_of_birth = ?, gender = ?, color = ?, weight = ?,
+        microchip_number = ?, medical_conditions = ?, allergies = ?,
+        current_medications = ?, special_notes = ?, updated_at = NOW()
+      WHERE pet_id = ?`,
+      [
+        owner_id, pet_name, species, breed, date_of_birth,
+        gender, color, weight, microchip_number, medical_conditions,
+        allergies, current_medications, special_notes, id
+      ]
     );
 
-    const updatedPet = await Pet.findByPk(id, {
-      include: [
-        {
-          model: PetOwner,
-          as: 'owner',
-          include: [{ model: User, as: 'user' }]
-        }
-      ]
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pet not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Pet updated successfully'
     });
-
-    securityLogger.info('Pet updated', {
-      updatedBy: req.user.id,
-      petId: id
+  } catch (error) {
+    console.error('Error updating pet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update pet',
+      error: error.message
     });
-
-    return success(res, { pet: updatedPet }, 'Pet updated successfully');
-
-  } catch (err) {
-    securityLogger.error('Update pet error', { error: err.message, petId: req.params.id });
-    return error(res, 'Failed to update pet', 500);
   }
 };
 
-/**
- * Delete pet
- * DELETE /api/pets/:id
- */
+// Delete pet
 const deletePet = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const pet = await Pet.findByPk(id);
-    if (!pet) {
-      return notFound(res, 'Pet');
+    const [result] = await db.query('DELETE FROM pets WHERE pet_id = ?', [id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pet not found'
+      });
     }
 
-    // Soft delete by setting status to Inactive
-    await Pet.update(
-      { status: 'Inactive' },
-      { where: { pet_id: id } }
-    );
-
-    securityLogger.warn('Pet deleted', {
-      deletedBy: req.user.id,
-      petId: id,
-      petName: pet.pet_name
+    res.status(200).json({
+      success: true,
+      message: 'Pet deleted successfully'
     });
-
-    return success(res, null, 'Pet deleted successfully');
-
-  } catch (err) {
-    securityLogger.error('Delete pet error', { error: err.message, petId: req.params.id });
-    return error(res, 'Failed to delete pet', 500);
-  }
-};
-
-/**
- * Get pets by owner
- * GET /api/pets/owner/:ownerId
- */
-const getPetsByOwner = async (req, res) => {
-  try {
-    const { ownerId } = req.params;
-
-    const pets = await Pet.findAll({
-      where: { owner_id: ownerId, status: 'Active' },
-      order: [['pet_name', 'ASC']]
+  } catch (error) {
+    console.error('Error deleting pet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete pet',
+      error: error.message
     });
-
-    return success(res, { pets }, 'Pets retrieved successfully');
-
-  } catch (err) {
-    securityLogger.error('Get pets by owner error', { error: err.message });
-    return error(res, 'Failed to retrieve pets', 500);
-  }
-};
-
-/**
- * Get pet's full medical history
- * GET /api/pets/:id/medical-history
- */
-const getPetMedicalHistory = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const pet = await Pet.findByPk(id, {
-      include: [
-        {
-          model: MedicalRecord,
-          as: 'medicalRecords',
-          order: [['record_date', 'DESC']],
-          include: [
-            {
-              model: User,
-              as: 'veterinarian',
-              attributes: ['full_name']
-            }
-          ]
-        },
-        {
-          model: Vaccination,
-          as: 'vaccinations',
-          order: [['given_date', 'DESC']],
-          include: [
-            {
-              model: User,
-              as: 'veterinarian',
-              attributes: ['full_name']
-            }
-          ]
-        }
-      ]
-    });
-
-    if (!pet) {
-      return notFound(res, 'Pet');
-    }
-
-    securityLogger.logDataAccess(req.user.id, 'PetMedicalHistory', id, 'READ');
-
-    return success(res, {
-      petName: pet.pet_name,
-      medicalRecords: pet.medicalRecords,
-      vaccinations: pet.vaccinations
-    }, 'Medical history retrieved successfully');
-
-  } catch (err) {
-    securityLogger.error('Get pet medical history error', { error: err.message });
-    return error(res, 'Failed to retrieve medical history', 500);
   }
 };
 
@@ -423,7 +236,5 @@ module.exports = {
   getPetById,
   createPet,
   updatePet,
-  deletePet,
-  getPetsByOwner,
-  getPetMedicalHistory
+  deletePet
 };

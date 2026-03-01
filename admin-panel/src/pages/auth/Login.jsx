@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 import {
   Box,
   Card,
@@ -9,99 +10,70 @@ import {
   Button,
   Typography,
   Container,
-  Alert,
-  CircularProgress,
-  Stack,
-  IconButton,
   InputAdornment,
-  Checkbox,
-  FormControlLabel,
-  Link,
-  Paper
+  IconButton,
+  Avatar
 } from '@mui/material';
-import { Visibility, VisibilityOff, Pets, LoginOutlined } from '@mui/icons-material';
-import { toast } from 'react-toastify';
-
-const API_URL = 'http://localhost:5000/api';
+import {
+  Visibility,
+  VisibilityOff,
+  Pets,
+  Lock,
+  Email
+} from '@mui/icons-material';
 
 const Login = () => {
-  const navigate = useNavigate();
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      navigate('/dashboard', { replace: true });
-    }
-
-    // Load remembered email if exists
-    const rememberedEmail = localStorage.getItem('rememberedEmail');
-    if (rememberedEmail) {
-      setFormData(prev => ({ ...prev, email: rememberedEmail }));
-      setRememberMe(true);
-    }
-  }, [navigate]);
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    setError('');
-  };
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
     try {
-      console.log('🔵 Attempting login for:', formData.email);
-
-      const response = await axios.post(`${API_URL}/auth/login`, {
-        email: formData.email,
-        password: formData.password
+      console.log('🔄 Attempting login...');
+      
+      const response = await axios.post('http://localhost:5000/api/auth/login', {
+        email,
+        password
       });
 
       console.log('✅ Login response:', response.data);
 
-      if (response.data.success) {
-        const { user, tokens } = response.data.data;
+      // Extract token from response
+      const token = 
+        response.data.token || 
+        response.data.data?.token || 
+        response.data.data?.accessToken ||
+        response.data.accessToken;
+        
+      const user = 
+        response.data.user || 
+        response.data.data?.user ||
+        response.data.data;
 
-        // Save tokens
-        localStorage.setItem('accessToken', tokens.accessToken);
-        localStorage.setItem('refreshToken', tokens.refreshToken);
+      if (token) {
+        localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
-
-        // Handle remember me
-        if (rememberMe) {
-          localStorage.setItem('rememberedEmail', formData.email);
-        } else {
-          localStorage.removeItem('rememberedEmail');
-        }
-
-        console.log('✅ Tokens saved, redirecting to dashboard...');
-        toast.success(`Welcome back, ${user.full_name}!`);
-
-        setTimeout(() => {
-          window.location.href = '/dashboard';
-        }, 500);
+        
+        console.log('✅ Token saved');
+        toast.success('Welcome back! 🎉');
+        
+        navigate('/dashboard');
       } else {
-        setError('Login failed');
+        console.error('❌ No token in response');
+        toast.error('Login failed: No token received');
       }
-    } catch (err) {
-      console.error('❌ Login error:', err);
-      const message = err.response?.data?.message || 'Invalid email or password. Please try again.';
-      setError(message);
+    } catch (error) {
+      console.error('❌ Login error:', error);
+      const message = error.response?.data?.message || 'Login failed. Please try again.';
       toast.error(message);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleForgotPassword = () => {
-    toast.info('Password reset feature coming soon!');
   };
 
   return (
@@ -109,267 +81,178 @@ const Login = () => {
       sx={{
         minHeight: '100vh',
         display: 'flex',
+        background: 'white',
         alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#f8fafc'
+        justifyContent: 'center'
       }}
     >
       <Container maxWidth="sm">
-        {/* Logo & Branding */}
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Paper
-            elevation={0}
-            sx={{
-              display: 'inline-flex',
-              p: 2.5,
-              borderRadius: '50%',
-              backgroundColor: '#1e3a8a',
-              mb: 2,
-              boxShadow: '0 10px 25px -5px rgba(30, 58, 138, 0.3)'
-            }}
-          >
-            <Pets sx={{ fontSize: 52, color: 'white' }} />
-          </Paper>
-          <Typography 
-            variant="h3" 
-            fontWeight="800" 
-            sx={{ 
-              color: '#1e3a8a',
-              letterSpacing: '-0.5px',
-              mb: 0.5
-            }}
-          >
-            PetCare Plus
-          </Typography>
-          <Typography 
-            variant="subtitle1" 
-            sx={{ 
-              color: '#64748b',
-              fontWeight: 500,
-              letterSpacing: '0.5px'
-            }}
-          >
-            Petcare Plus Management System
-          </Typography>
-        </Box>
-
-        {/* Login Card */}
-        <Card 
-          elevation={0}
-          sx={{ 
+        <Card
+          sx={{
+            width: '100%',
+            boxShadow: '0 8px 32px rgba(0, 31, 63, 0.15)',
             borderRadius: 3,
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'
+            overflow: 'hidden',
+            border: '1px solid #e0e0e0'
           }}
         >
-          <CardContent sx={{ p: 5 }}>
-            {/* Title */}
-            <Box sx={{ mb: 4 }}>
-              <Typography 
-                variant="h5" 
-                fontWeight="700" 
-                color="primary.main"
-                gutterBottom
-              >
-                Sign In
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Enter your credentials to access your account
-              </Typography>
-            </Box>
+          {/* Header Section */}
+          <Box
+            sx={{
+              background: '#001f3f',
+              py: 4,
+              textAlign: 'center'
+            }}
+          >
+            <Avatar
+              sx={{
+                width: 80,
+                height: 80,
+                margin: '0 auto',
+                bgcolor: 'white',
+                color: '#001f3f',
+                fontSize: '2.5rem',
+                mb: 2,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }}
+            >
+              <Pets fontSize="large" />
+            </Avatar>
+            <Typography variant="h4" fontWeight="bold" color="white" gutterBottom>
+              PetCare Plus
+            </Typography>
+            <Typography variant="body2" color="rgba(255,255,255,0.9)">
+              Admin Portal
+            </Typography>
+          </Box>
 
-            {/* Error Alert */}
-            {error && (
-              <Alert 
-                severity="error" 
-                sx={{ 
-                  mb: 3, 
+          <CardContent sx={{ p: 5 }}>
+            <Typography variant="h5" align="center" fontWeight="600" gutterBottom sx={{ mb: 1, color: '#001f3f' }}>
+              Welcome Back
+            </Typography>
+            <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 4 }}>
+              Sign in to your account to continue
+            </Typography>
+
+            <form onSubmit={handleSubmit}>
+              <TextField
+                fullWidth
+                label="Email Address"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                margin="normal"
+                required
+                autoFocus
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Email sx={{ color: '#001f3f' }} />
+                    </InputAdornment>
+                  )
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    '&:hover fieldset': {
+                      borderColor: '#001f3f'
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#001f3f'
+                    }
+                  },
+                  '& .MuiInputLabel-root.Mui-focused': {
+                    color: '#001f3f'
+                  }
+                }}
+              />
+
+              <TextField
+                fullWidth
+                label="Password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                margin="normal"
+                required
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Lock sx={{ color: '#001f3f' }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPassword(!showPassword)}
+                        edge="end"
+                        sx={{ color: '#001f3f' }}
+                      >
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    '&:hover fieldset': {
+                      borderColor: '#001f3f'
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#001f3f'
+                    }
+                  },
+                  '& .MuiInputLabel-root.Mui-focused': {
+                    color: '#001f3f'
+                  }
+                }}
+              />
+
+              <Button
+                fullWidth
+                type="submit"
+                variant="contained"
+                size="large"
+                disabled={loading}
+                sx={{
+                  mt: 4,
+                  py: 1.5,
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: '1rem',
                   borderRadius: 2,
-                  border: '1px solid #fecaca',
-                  backgroundColor: '#fef2f2'
+                  bgcolor: '#001f3f',
+                  color: 'white',
+                  boxShadow: '0 4px 12px rgba(0, 31, 63, 0.25)',
+                  '&:hover': {
+                    bgcolor: '#003366',
+                    boxShadow: '0 6px 16px rgba(0, 31, 63, 0.35)'
+                  },
+                  '&:disabled': {
+                    bgcolor: '#cccccc'
+                  }
                 }}
               >
-                {error}
-              </Alert>
-            )}
-
-            {/* Login Form */}
-            <Box component="form" onSubmit={handleSubmit}>
-              <Stack spacing={3}>
-                {/* Email Field */}
-                <Box>
-                  <Typography 
-                    variant="caption" 
-                    fontWeight="600" 
-                    color="text.primary"
-                    sx={{ mb: 1, display: 'block' }}
-                  >
-                    Email Address
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    disabled={loading}
-                    placeholder="admin@petcareplus.lk"
-                    autoComplete="email"
-                    autoFocus
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 2,
-                        backgroundColor: '#ffffff',
-                        '&:hover fieldset': {
-                          borderColor: 'primary.main'
-                        },
-                        '&.Mui-focused fieldset': {
-                          borderWidth: 2
-                        }
-                      }
-                    }}
-                  />
-                </Box>
-
-                {/* Password Field */}
-                <Box>
-                  <Typography 
-                    variant="caption" 
-                    fontWeight="600" 
-                    color="text.primary"
-                    sx={{ mb: 1, display: 'block' }}
-                  >
-                    Password
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                    disabled={loading}
-                    placeholder="Enter your password"
-                    autoComplete="current-password"
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton 
-                            onClick={() => setShowPassword(!showPassword)} 
-                            edge="end"
-                            tabIndex={-1}
-                          >
-                            {showPassword ? <VisibilityOff /> : <Visibility />}
-                          </IconButton>
-                        </InputAdornment>
-                      )
-                    }}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 2,
-                        backgroundColor: '#ffffff',
-                        '&:hover fieldset': {
-                          borderColor: 'primary.main'
-                        },
-                        '&.Mui-focused fieldset': {
-                          borderWidth: 2
-                        }
-                      }
-                    }}
-                  />
-                </Box>
-
-                {/* Remember Me & Forgot Password */}
-                <Box 
-                  sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center' 
-                  }}
-                >
-                  <FormControlLabel
-                    control={
-                      <Checkbox 
-                        checked={rememberMe}
-                        onChange={(e) => setRememberMe(e.target.checked)}
-                        sx={{
-                          color: '#94a3b8',
-                          '&.Mui-checked': {
-                            color: '#1e3a8a'
-                          }
-                        }}
-                      />
-                    }
-                    label={
-                      <Typography variant="body2" color="text.secondary">
-                        Remember me
-                      </Typography>
-                    }
-                  />
-                  <Link
-                    component="button"
-                    type="button"
-                    variant="body2"
-                    onClick={handleForgotPassword}
-                    sx={{
-                      color: '#1e3a8a',
-                      fontWeight: 600,
-                      textDecoration: 'none',
-                      '&:hover': {
-                        textDecoration: 'underline'
-                      }
-                    }}
-                  >
-                    Forgot password?
-                  </Link>
-                </Box>
-
-                {/* Sign In Button */}
-                <Button
-                  type="submit"
-                  fullWidth
-                  variant="contained"
-                  size="large"
-                  disabled={loading}
-                  startIcon={loading ? null : <LoginOutlined />}
-                  sx={{ 
-                    py: 1.8,
-                    fontSize: '1rem',
-                    fontWeight: 700,
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    backgroundColor: '#1e3a8a',
-                    boxShadow: '0 4px 6px -1px rgba(30, 58, 138, 0.3)',
-                    '&:hover': {
-                      backgroundColor: '#1e40af',
-                      boxShadow: '0 10px 15px -3px rgba(30, 58, 138, 0.4)'
-                    },
-                    '&:disabled': {
-                      backgroundColor: '#94a3b8'
-                    }
-                  }}
-                >
-                  {loading ? (
-                    <CircularProgress size={24} sx={{ color: 'white' }} />
-                  ) : (
-                    'Sign In'
-                  )}
-                </Button>
-              </Stack>
-            </Box>
+                {loading ? 'Signing In...' : 'Sign In'}
+              </Button>
+            </form>
           </CardContent>
-        </Card>
 
-        {/* Footer */}
-        <Box sx={{ mt: 4, textAlign: 'center' }}>
-          <Typography variant="caption" color="text.secondary">
-            © 2026 PetCare Plus Management System
-          </Typography>
-          <Typography variant="caption" display="block" color="text.secondary">
-            Developed by Hishma Dilshar
-          </Typography>
-        </Box>
+          {/* Footer */}
+          <Box
+            sx={{
+              py: 2,
+              textAlign: 'center',
+              bgcolor: '#f5f5f5',
+              borderTop: '1px solid #e0e0e0'
+            }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              © 2026 PetCare Plus Management System
+            </Typography>
+          </Box>
+        </Card>
       </Container>
     </Box>
   );

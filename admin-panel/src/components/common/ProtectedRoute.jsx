@@ -1,29 +1,19 @@
-import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { CircularProgress, Box } from '@mui/material';
 
 const ProtectedRoute = ({ children }) => {
-  const [loading, setLoading] = React.useState(true);
-  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
-
-  React.useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    setIsAuthenticated(!!token);
-    setLoading(false);
-  }, []);
-
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (!isAuthenticated) {
+  const token = localStorage.getItem('token');
+  
+  console.log('🔐 ProtectedRoute Check:');
+  console.log('  Token exists:', !!token);
+  console.log('  Current path:', window.location.pathname);
+  
+  // If no token, redirect to login
+  if (!token) {
+    console.log('  ❌ No token - redirecting to /login');
     return <Navigate to="/login" replace />;
   }
 
+  console.log('  ✅ Token found - rendering protected content');
   return children;
 };
 
