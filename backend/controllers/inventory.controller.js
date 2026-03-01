@@ -1,452 +1,195 @@
-const { Inventory } = require('../models');
+const db = require('../config/database');
 const { success, error, notFound } = require('../utils/responseHandler');
-const securityLogger = require('../utils/securityLogger');
-const { Op } = require('sequelize');
 
-/**
- * Get all inventory items
- * GET /api/inventory
- */
 const getAllInventoryItems = async (req, res) => {
   try {
-    const { page = 1, limit = 10, category, status, search } = req.query;
-    const offset = (page - 1) * limit;
+    const { page = 1, limit = 50, search, category } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    // Build where clause
-    const where = {};
-    if (category) where.category = category;
-    if (status) where.status = status;
-    if (search) {
-      where[Op.or] = [
-        { item_name: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } },
-        { supplier: { [Op.like]: `%${search}%` } }
-      ];
-    }
+    let sql = 'SELECT * FROM inventory WHERE 1=1';
+    const params = [];
 
-    const { count, rows: items } = await Inventory.findAndCountAll({
-      where,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [['item_name', 'ASC']]
-    });
+    if (search) { sql += ' AND (item_name LIKE ? OR description LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
+    if (category) { sql += ' AND category = ?'; params.push(category); }
 
+    const countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as total');
+    const [countRows] = await db.query(countSql, params);
+    const total = countRows[0].total;
+
+    sql += ' ORDER BY item_name ASC LIMIT ? OFFSET ?';
+    params.push(parseInt(limit), offset);
+
+    const [items] = await db.query(sql, params);
     return success(res, {
       items,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / limit)
-      }
-    }, 'Inventory items retrieved successfully');
-
+      pagination: { total, page: parseInt(page), limit: parseInt(limit), totalPages: Math.ceil(total / limit) }
+    }, 'Inventory retrieved successfully');
   } catch (err) {
-    securityLogger.error('Get all inventory error', { error: err.message });
-    return error(res, 'Failed to retrieve inventory items', 500);
+    return error(res, 'Failed to retrieve inventory', 500);
   }
 };
 
-/**
- * Get inventory item by ID
- * GET /api/inventory/:id
- */
 const getInventoryItemById = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const item = await Inventory.findByPk(id);
-
-    if (!item) {
-      return notFound(res, 'Inventory item');
-    }
-
-    return success(res, { item }, 'Inventory item retrieved successfully');
-
+    const [rows] = await db.query('SELECT * FROM inventory WHERE item_id = ?', [id]);
+    if (rows.length === 0) return notFound(res, 'Inventory item');
+    return success(res, { item: rows[0] }, 'Inventory item retrieved successfully');
   } catch (err) {
-    securityLogger.error('Get inventory item by ID error', { error: err.message });
     return error(res, 'Failed to retrieve inventory item', 500);
   }
 };
 
-/**
- * Create inventory item
- * POST /api/inventory
- */
-const createInventoryItem = async (req, res) => {
-  try {
-    const {
-      item_name,
-      category,
-      description,
-      quantity,
-      unit,
-      unit_price,
-      reorder_level,
-      supplier,
-      expiry_date
-    } = req.body;
-
-    // Check if item already exists
-    const existingItem = await Inventory.findOne({
-      where: { item_name: { [Op.like]: item_name } }
-    });
-
-    if (existingItem) {
-      return res.status(409).json({
-        success: false,
-        message: 'Item with this name already exists',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Create item
-    const item = await Inventory.create({
-      item_name,
-      category,
-      description,
-      quantity: quantity || 0,
-      unit: unit || 'unit',
-      unit_price,
-      reorder_level: reorder_level || 10,
-      supplier,
-      expiry_date
-    });
-
-    securityLogger.info('Inventory item created', {
-      createdBy: req.user.id,
-      itemId: item.item_id,
-      itemName: item_name
-    });
-
-    return success(res, { item }, 'Inventory item created successfully', 201);
-
-  } catch (err) {
-    securityLogger.error('Create inventory item error', { error: err.message });
-    return error(res, 'Failed to create inventory item', 500);
-  }
-};
-
-/**
- * Update inventory item
- * PUT /api/inventory/:id
- */
-const updateInventoryItem = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const {
-      item_name,
-      category,
-      description,
-      quantity,
-      unit,
-      unit_price,
-      reorder_level,
-      supplier,
-      expiry_date,
-      status
-    } = req.body;
-
-    const item = await Inventory.findByPk(id);
-    if (!item) {
-      return notFound(res, 'Inventory item');
-    }
-
-    // Update item
-    await Inventory.update(
-      {
-        item_name,
-        category,
-        description,
-        quantity,
-        unit,
-        unit_price,
-        reorder_level,
-        supplier,
-        expiry_date,
-        status
-      },
-      { where: { item_id: id } }
-    );
-
-    const updatedItem = await Inventory.findByPk(id);
-
-    securityLogger.info('Inventory item updated', {
-      updatedBy: req.user.id,
-      itemId: id
-    });
-
-    return success(res, { item: updatedItem }, 'Inventory item updated successfully');
-
-  } catch (err) {
-    securityLogger.error('Update inventory item error', { error: err.message });
-    return error(res, 'Failed to update inventory item', 500);
-  }
-};
-
-/**
- * Delete inventory item
- * DELETE /api/inventory/:id
- */
-const deleteInventoryItem = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const item = await Inventory.findByPk(id);
-    if (!item) {
-      return notFound(res, 'Inventory item');
-    }
-
-    await Inventory.destroy({ where: { item_id: id } });
-
-    securityLogger.warn('Inventory item deleted', {
-      deletedBy: req.user.id,
-      itemId: id,
-      itemName: item.item_name
-    });
-
-    return success(res, null, 'Inventory item deleted successfully');
-
-  } catch (err) {
-    securityLogger.error('Delete inventory item error', { error: err.message });
-    return error(res, 'Failed to delete inventory item', 500);
-  }
-};
-
-/**
- * Adjust inventory quantity
- * PUT /api/inventory/:id/adjust
- */
-const adjustInventoryQuantity = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { adjustment, reason } = req.body; // adjustment can be positive or negative
-
-    if (!adjustment || adjustment === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Adjustment value is required and cannot be zero',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    const item = await Inventory.findByPk(id);
-    if (!item) {
-      return notFound(res, 'Inventory item');
-    }
-
-    const newQuantity = item.quantity + adjustment;
-
-    if (newQuantity < 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Insufficient quantity for this adjustment',
-        currentQuantity: item.quantity,
-        requestedAdjustment: adjustment,
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Update quantity
-    await Inventory.update(
-      { quantity: newQuantity },
-      { where: { item_id: id } }
-    );
-
-    const updatedItem = await Inventory.findByPk(id);
-
-    securityLogger.info('Inventory quantity adjusted', {
-      adjustedBy: req.user.id,
-      itemId: id,
-      previousQuantity: item.quantity,
-      adjustment,
-      newQuantity,
-      reason
-    });
-
-    return success(res, { item: updatedItem }, 'Inventory quantity adjusted successfully');
-
-  } catch (err) {
-    securityLogger.error('Adjust inventory quantity error', { error: err.message });
-    return error(res, 'Failed to adjust inventory quantity', 500);
-  }
-};
-
-/**
- * Get low stock items
- * GET /api/inventory/low-stock
- */
-const getLowStockItems = async (req, res) => {
-  try {
-    const items = await Inventory.findAll({
-      where: {
-        status: { [Op.in]: ['Low Stock', 'Out of Stock'] }
-      },
-      order: [['quantity', 'ASC']]
-    });
-
-    return success(res, { items, count: items.length }, 'Low stock items retrieved');
-
-  } catch (err) {
-    securityLogger.error('Get low stock items error', { error: err.message });
-    return error(res, 'Failed to retrieve low stock items', 500);
-  }
-};
-
-/**
- * Get expired items
- * GET /api/inventory/expired
- */
-const getExpiredItems = async (req, res) => {
-  try {
-    const today = new Date();
-
-    const items = await Inventory.findAll({
-      where: {
-        expiry_date: { [Op.lt]: today }
-      },
-      order: [['expiry_date', 'ASC']]
-    });
-
-    // Auto-update status to Expired
-    for (const item of items) {
-      if (item.status !== 'Expired') {
-        await Inventory.update(
-          { status: 'Expired' },
-          { where: { item_id: item.item_id } }
-        );
-      }
-    }
-
-    return success(res, { items, count: items.length }, 'Expired items retrieved');
-
-  } catch (err) {
-    securityLogger.error('Get expired items error', { error: err.message });
-    return error(res, 'Failed to retrieve expired items', 500);
-  }
-};
-
-/**
- * Get items expiring soon
- * GET /api/inventory/expiring-soon
- */
-const getExpiringItems = async (req, res) => {
-  try {
-    const today = new Date();
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + 30); // Next 30 days
-
-    const items = await Inventory.findAll({
-      where: {
-        expiry_date: {
-          [Op.between]: [today, futureDate]
-        }
-      },
-      order: [['expiry_date', 'ASC']]
-    });
-
-    return success(res, { items, count: items.length }, 'Expiring items retrieved');
-
-  } catch (err) {
-    securityLogger.error('Get expiring items error', { error: err.message });
-    return error(res, 'Failed to retrieve expiring items', 500);
-  }
-};
-
-/**
- * Get inventory by category
- * GET /api/inventory/category/:category
- */
-const getInventoryByCategory = async (req, res) => {
-  try {
-    const { category } = req.params;
-
-    const validCategories = ['Medicine', 'Vaccine', 'Equipment', 'Supply', 'Food'];
-    if (!validCategories.includes(category)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid category',
-        validCategories,
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    const items = await Inventory.findAll({
-      where: { category },
-      order: [['item_name', 'ASC']]
-    });
-
-    return success(res, { items, category }, `${category} items retrieved successfully`);
-
-  } catch (err) {
-    securityLogger.error('Get inventory by category error', { error: err.message });
-    return error(res, 'Failed to retrieve inventory items', 500);
-  }
-};
-
-/**
- * Get inventory statistics
- * GET /api/inventory/stats
- */
 const getInventoryStats = async (req, res) => {
   try {
-    const totalItems = await Inventory.count();
-    const lowStockItems = await Inventory.count({
-      where: { status: 'Low Stock' }
-    });
-    const outOfStockItems = await Inventory.count({
-      where: { status: 'Out of Stock' }
-    });
-    const expiredItems = await Inventory.count({
-      where: { status: 'Expired' }
-    });
-
-    const today = new Date();
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + 30);
-
-    const expiringItems = await Inventory.count({
-      where: {
-        expiry_date: {
-          [Op.between]: [today, futureDate]
-        }
-      }
-    });
-
-    // Category breakdown
-    const categoryStats = await Inventory.findAll({
-      attributes: [
-        'category',
-        [Inventory.sequelize.fn('COUNT', Inventory.sequelize.col('item_id')), 'count']
-      ],
-      group: ['category']
-    });
-
-    return success(res, {
-      totalItems,
-      lowStockItems,
-      outOfStockItems,
-      expiredItems,
-      expiringItems,
-      categoryBreakdown: categoryStats
-    }, 'Inventory statistics retrieved');
-
+    const [rows] = await db.query(`
+      SELECT
+        COUNT(*) as total_items,
+        SUM(CASE WHEN quantity <= reorder_level AND quantity > 0 THEN 1 ELSE 0 END) as low_stock_count,
+        SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END) as out_of_stock_count,
+        SUM(CASE WHEN expiry_date < NOW() THEN 1 ELSE 0 END) as expired_count,
+        SUM(CASE WHEN expiry_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) as expiring_soon_count,
+        SUM(quantity * unit_price) as total_value
+      FROM inventory
+    `);
+    return success(res, rows[0], 'Inventory statistics retrieved');
   } catch (err) {
-    securityLogger.error('Get inventory stats error', { error: err.message });
     return error(res, 'Failed to retrieve inventory statistics', 500);
   }
 };
 
+const getLowStockItems = async (req, res) => {
+  try {
+    const [items] = await db.query(
+      'SELECT * FROM inventory WHERE quantity <= reorder_level ORDER BY quantity ASC'
+    );
+    return success(res, { items, count: items.length }, 'Low stock items retrieved');
+  } catch (err) {
+    return error(res, 'Failed to retrieve low stock items', 500);
+  }
+};
+
+const getExpiredItems = async (req, res) => {
+  try {
+    const [items] = await db.query(
+      'SELECT * FROM inventory WHERE expiry_date < NOW() ORDER BY expiry_date ASC'
+    );
+    return success(res, { items, count: items.length }, 'Expired items retrieved');
+  } catch (err) {
+    return error(res, 'Failed to retrieve expired items', 500);
+  }
+};
+
+const getExpiringItems = async (req, res) => {
+  try {
+    const [items] = await db.query(
+      'SELECT * FROM inventory WHERE expiry_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 30 DAY) ORDER BY expiry_date ASC'
+    );
+    return success(res, { items, count: items.length }, 'Expiring items retrieved');
+  } catch (err) {
+    return error(res, 'Failed to retrieve expiring items', 500);
+  }
+};
+
+const getInventoryByCategory = async (req, res) => {
+  try {
+    const { category } = req.params;
+    const [items] = await db.query(
+      'SELECT * FROM inventory WHERE category = ? ORDER BY item_name ASC',
+      [category]
+    );
+    return success(res, { items, category }, 'Inventory by category retrieved');
+  } catch (err) {
+    return error(res, 'Failed to retrieve inventory by category', 500);
+  }
+};
+
+const createInventoryItem = async (req, res) => {
+  try {
+    const { item_name, category, description, quantity, unit, unit_price, reorder_level, supplier, expiry_date } = req.body;
+
+    const [result] = await db.query(
+      `INSERT INTO inventory (item_name, category, description, quantity, unit, unit_price, reorder_level, supplier, expiry_date, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active')`,
+      [item_name, category || 'Supplies', description || null, quantity || 0, unit || 'units',
+       unit_price || 0, reorder_level || 0, supplier || null, expiry_date || null]
+    );
+
+    const [rows] = await db.query('SELECT * FROM inventory WHERE item_id = ?', [result.insertId]);
+    return success(res, { item: rows[0] }, 'Inventory item created successfully', 201);
+  } catch (err) {
+    return error(res, 'Failed to create inventory item', 500);
+  }
+};
+
+const updateInventoryItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { item_name, category, description, quantity, unit, unit_price, reorder_level, supplier, expiry_date, status } = req.body;
+
+    const [existing] = await db.query('SELECT item_id FROM inventory WHERE item_id = ?', [id]);
+    if (existing.length === 0) return notFound(res, 'Inventory item');
+
+    const fields = [];
+    const params = [];
+    if (item_name !== undefined) { fields.push('item_name = ?'); params.push(item_name); }
+    if (category !== undefined) { fields.push('category = ?'); params.push(category); }
+    if (description !== undefined) { fields.push('description = ?'); params.push(description); }
+    if (quantity !== undefined) { fields.push('quantity = ?'); params.push(quantity); }
+    if (unit !== undefined) { fields.push('unit = ?'); params.push(unit); }
+    if (unit_price !== undefined) { fields.push('unit_price = ?'); params.push(unit_price); }
+    if (reorder_level !== undefined) { fields.push('reorder_level = ?'); params.push(reorder_level); }
+    if (supplier !== undefined) { fields.push('supplier = ?'); params.push(supplier); }
+    if (expiry_date !== undefined) { fields.push('expiry_date = ?'); params.push(expiry_date); }
+    if (status !== undefined) { fields.push('status = ?'); params.push(status); }
+
+    if (fields.length > 0) {
+      params.push(id);
+      await db.query(`UPDATE inventory SET ${fields.join(', ')} WHERE item_id = ?`, params);
+    }
+
+    const [rows] = await db.query('SELECT * FROM inventory WHERE item_id = ?', [id]);
+    return success(res, { item: rows[0] }, 'Inventory item updated successfully');
+  } catch (err) {
+    return error(res, 'Failed to update inventory item', 500);
+  }
+};
+
+const adjustInventoryQuantity = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adjustment, reason } = req.body;
+
+    const [existing] = await db.query('SELECT item_id, quantity FROM inventory WHERE item_id = ?', [id]);
+    if (existing.length === 0) return notFound(res, 'Inventory item');
+
+    const newQuantity = existing[0].quantity + parseInt(adjustment);
+    if (newQuantity < 0) {
+      return res.status(400).json({ success: false, message: 'Insufficient stock for this adjustment' });
+    }
+
+    await db.query('UPDATE inventory SET quantity = ? WHERE item_id = ?', [newQuantity, id]);
+    const [rows] = await db.query('SELECT * FROM inventory WHERE item_id = ?', [id]);
+    return success(res, { item: rows[0] }, 'Inventory quantity adjusted successfully');
+  } catch (err) {
+    return error(res, 'Failed to adjust inventory quantity', 500);
+  }
+};
+
+const deleteInventoryItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.query('SELECT item_id FROM inventory WHERE item_id = ?', [id]);
+    if (existing.length === 0) return notFound(res, 'Inventory item');
+    await db.query('DELETE FROM inventory WHERE item_id = ?', [id]);
+    return success(res, null, 'Inventory item deleted successfully');
+  } catch (err) {
+    return error(res, 'Failed to delete inventory item', 500);
+  }
+};
+
 module.exports = {
-  getAllInventoryItems,
-  getInventoryItemById,
-  createInventoryItem,
-  updateInventoryItem,
-  deleteInventoryItem,
-  adjustInventoryQuantity,
-  getLowStockItems,
-  getExpiredItems,
-  getExpiringItems,
-  getInventoryByCategory,
-  getInventoryStats
+  getAllInventoryItems, getInventoryItemById, getInventoryStats, getLowStockItems,
+  getExpiredItems, getExpiringItems, getInventoryByCategory, createInventoryItem,
+  updateInventoryItem, adjustInventoryQuantity, deleteInventoryItem
 };

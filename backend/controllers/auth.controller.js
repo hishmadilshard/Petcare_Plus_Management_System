@@ -2,163 +2,196 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 
-// Login function
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-token-secret-change-this-in-production';
+
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log('🔍 Login attempt:', email);
-    console.log('📝 Password received:', password);
-    console.log('📝 Password length:', password.length);
-
-    // Validate input
     if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email and password are required'
-      });
+      return res.status(400).json({ success: false, message: 'Email and password are required' });
     }
 
-    console.log('✅ Input validated');
-
-    // Find user
-    const [users] = await db.query(
-      'SELECT * FROM users WHERE email = ?',
-      [email]
-    );
+    const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
 
     if (users.length === 0) {
-      console.log('❌ User not found');
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
     const user = users[0];
-    console.log('✅ User found:', user.email, 'Role:', user.role, 'Status:', user.status);
-    console.log('🔐 Hash from DB:', user.password);
-    console.log('🔐 Hash length:', user.password.length);
 
-    // Check if user is active
     if (user.status !== 'Active') {
-      console.log('❌ User is inactive');
-      return res.status(401).json({
-        success: false,
-        message: 'Account is inactive'
-      });
+      return res.status(401).json({ success: false, message: 'Account is inactive' });
     }
 
-    console.log('✅ User is active');
-
-    // Verify password
-    console.log('🔄 Comparing passwords...');
-    console.log('   Input password:', password);
-    console.log('   Stored hash:', user.password);
-    
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    
-    console.log('🔐 Password comparison result:', isValidPassword);
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
 
     if (!isValidPassword) {
-      console.log('❌ Invalid password');
-      
-      // Extra debug: Try hashing the input to see format
-      const testHash = await bcrypt.hash(password, 10);
-      console.log('🧪 Test hash of input:', testHash);
-      console.log('🧪 Test compare result:', await bcrypt.compare(password, testHash));
-      
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    console.log('✅ Password valid');
-
-    // Generate tokens
     const accessToken = jwt.sign(
-      {
-        user_id: user.user_id,
-        email: user.email,
-        role: user.role
-      },
-      process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production',
+      { id: user.user_id, user_id: user.user_id, email: user.email, role: user.role },
+      JWT_SECRET,
       { expiresIn: '24h' }
     );
 
     const refreshToken = jwt.sign(
-      {
-        user_id: user.user_id
-      },
-      process.env.JWT_REFRESH_SECRET || 'your-refresh-token-secret-change-this-in-production',
+      { user_id: user.user_id },
+      JWT_REFRESH_SECRET,
       { expiresIn: '7d' }
     );
 
-    console.log('✅ Tokens generated');
-    console.log('🔑 Access Token:', accessToken.substring(0, 30) + '...');
+    await db.query('UPDATE users SET refresh_token = ?, last_login = NOW() WHERE user_id = ?', [refreshToken, user.user_id]);
 
-    // Save refresh token
-    await db.query(
-      'UPDATE users SET refresh_token = ? WHERE user_id = ?',
-      [refreshToken, user.user_id]
-    );
-
-    console.log('✅ Login successful for:', user.email, `(${user.role})`);
-
-    // Send response
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Login successful',
       data: {
-        user: {
-          user_id: user.user_id,
-          email: user.email,
-          role: user.role,
-          full_name: user.full_name
-        },
+        user: { user_id: user.user_id, email: user.email, role: user.role, full_name: user.full_name },
         token: accessToken,
-        refreshToken: refreshToken
+        accessToken,
+        refreshToken
       }
     });
 
   } catch (error) {
-    console.error('❌ Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 
-// Register function
 const register = async (req, res) => {
-  res.status(501).json({
-    success: false,
-    message: 'Registration not implemented'
-  });
+  try {
+    const { full_name, email, password, phone, role = 'Owner' } = req.body;
+
+    if (!full_name || !email || !password) {
+      return res.status(400).json({ success: false, message: 'Full name, email and password are required' });
+    }
+
+    const [existing] = await db.query('SELECT user_id FROM users WHERE email = ?', [email]);
+    if (existing.length > 0) {
+      return res.status(409).json({ success: false, message: 'Email already registered' });
+    }
+
+    const password_hash = await bcrypt.hash(password, 12);
+
+    const [result] = await db.query(
+      'INSERT INTO users (full_name, email, phone, password_hash, role, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [full_name, email, phone || null, password_hash, role, 'Active']
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: 'User registered successfully',
+      data: { user_id: result.insertId, email, role }
+    });
+
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
 };
 
-// Logout function
+const refreshAccessToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, message: 'Refresh token required' });
+    }
+
+    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    const [users] = await db.query(
+      'SELECT * FROM users WHERE user_id = ? AND refresh_token = ?',
+      [decoded.user_id, refreshToken]
+    );
+
+    if (users.length === 0) {
+      return res.status(401).json({ success: false, message: 'Invalid refresh token' });
+    }
+
+    const user = users[0];
+    const accessToken = jwt.sign(
+      { id: user.user_id, user_id: user.user_id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    return res.status(200).json({ success: true, message: 'Token refreshed', data: { accessToken } });
+
+  } catch (error) {
+    return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
+  }
+};
+
 const logout = async (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Logout successful'
-  });
+  try {
+    const { refreshToken } = req.body;
+    if (refreshToken) {
+      await db.query('UPDATE users SET refresh_token = NULL WHERE refresh_token = ?', [refreshToken]);
+    }
+    return res.status(200).json({ success: true, message: 'Logout successful' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
 };
 
-// Refresh token function
-const refreshToken = async (req, res) => {
-  res.status(501).json({
-    success: false,
-    message: 'Token refresh not implemented'
-  });
+const getCurrentUser = async (req, res) => {
+  try {
+    const [users] = await db.query(
+      'SELECT user_id, full_name, email, phone, role, status, profile_image, created_at, last_login FROM users WHERE user_id = ?',
+      [req.user.id]
+    );
+    if (users.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    return res.status(200).json({ success: true, data: { user: users[0] } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
 };
 
-module.exports = {
-  login,
-  register,
-  logout,
-  refreshToken
+const updateProfile = async (req, res) => {
+  try {
+    const { full_name, phone } = req.body;
+    await db.query(
+      'UPDATE users SET full_name = ?, phone = ? WHERE user_id = ?',
+      [full_name, phone, req.user.id]
+    );
+    const [users] = await db.query(
+      'SELECT user_id, full_name, email, phone, role, status FROM users WHERE user_id = ?',
+      [req.user.id]
+    );
+    return res.status(200).json({ success: true, message: 'Profile updated', data: { user: users[0] } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
 };
+
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Current and new password are required' });
+    }
+
+    const [users] = await db.query('SELECT * FROM users WHERE user_id = ?', [req.user.id]);
+    if (users.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const user = users[0];
+    const isValid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ success: false, message: 'Current password is incorrect' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 12);
+    await db.query('UPDATE users SET password_hash = ? WHERE user_id = ?', [newHash, req.user.id]);
+
+    return res.status(200).json({ success: true, message: 'Password changed successfully' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+module.exports = { login, register, refreshToken: refreshAccessToken, refreshAccessToken, logout, getCurrentUser, updateProfile, changePassword };
