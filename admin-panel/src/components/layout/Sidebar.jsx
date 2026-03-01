@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -26,7 +26,11 @@ import {
   Logout,
   ChevronLeft,
   ChevronRight,
-  MedicalServices
+  MedicalServices,
+  Vaccines,
+  Receipt,
+  Inventory2,
+  ManageAccounts
 } from '@mui/icons-material';
 
 const drawerWidth = 280;
@@ -86,16 +90,34 @@ const Sidebar = ({ open, onClose, collapsed, onToggleCollapse }) => {
         roles: ['Admin', 'Veterinarian']
       },
       {
+        title: 'Vaccinations',
+        icon: <Vaccines />,
+        path: '/vaccinations',
+        roles: ['Admin', 'Veterinarian', 'Receptionist']
+      },
+      {
+        title: 'Billing',
+        icon: <Receipt />,
+        path: '/billing',
+        roles: ['Admin', 'Receptionist']
+      },
+      {
+        title: 'Inventory',
+        icon: <Inventory2 />,
+        path: '/inventory',
+        roles: ['Admin', 'Receptionist']
+      },
+      {
         title: 'Veterinarians',
         icon: <LocalHospital />,
         path: '/veterinarians',
         roles: ['Admin']
       },
       {
-        title: 'Services',
-        icon: <MedicalServices />,
-        path: '/services',
-        roles: ['Admin', 'Veterinarian']
+        title: 'Users',
+        icon: <ManageAccounts />,
+        path: '/users',
+        roles: ['Admin']
       },
       {
         title: 'Settings',
