@@ -26,7 +26,9 @@ import {
   Logout,
   ChevronLeft,
   ChevronRight,
-  MedicalServices
+  MedicalServices,
+  Inventory,
+  Receipt
 } from '@mui/icons-material';
 
 const drawerWidth = 280;
@@ -77,13 +79,25 @@ const Sidebar = ({ open, onClose, collapsed, onToggleCollapse }) => {
         title: 'Appointments',
         icon: <EventNote />,
         path: '/appointments',
-        roles: ['Admin', 'Veterinarian', 'Receptionist']
+        roles: ['Admin', 'Veterinarian', 'Receptionist', 'Vet']
       },
       {
         title: 'Medical Records',
         icon: <Assignment />,
         path: '/medical-records',
-        roles: ['Admin', 'Veterinarian']
+        roles: ['Admin', 'Veterinarian', 'Vet']
+      },
+      {
+        title: 'Inventory',
+        icon: <Inventory />,
+        path: '/inventory',
+        roles: ['Admin', 'Veterinarian', 'Receptionist', 'Vet']
+      },
+      {
+        title: 'Billing',
+        icon: <Receipt />,
+        path: '/invoices',
+        roles: ['Admin', 'Receptionist']
       },
       {
         title: 'Veterinarians',

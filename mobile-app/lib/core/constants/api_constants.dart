@@ -5,7 +5,11 @@ class ApiConstants {
 
   static String get baseUrl {
     if (Platform.isAndroid) {
+      // Android emulator routes 10.0.2.2 to the host machine's localhost.
       return 'http://10.0.2.2:5000/api';
+    }
+    if (Platform.isIOS || Platform.isMacOS || Platform.isLinux || Platform.isWindows) {
+      return 'http://localhost:5000/api';
     }
     return 'http://localhost:5000/api';
   }
