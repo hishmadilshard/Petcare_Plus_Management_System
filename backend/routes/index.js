@@ -11,6 +11,7 @@ const vaccinationRoutes = require('./vaccination.routes');
 const inventoryRoutes = require('./inventory.routes');
 const invoiceRoutes = require('./invoice.routes');
 const notificationRoutes = require('./notification.routes');
+const dashboardRoutes = require('./dashboard.routes');
 
 // API version prefix
 const API_VERSION = process.env.API_VERSION || 'v1';
@@ -35,6 +36,7 @@ router.use('/vaccinations', vaccinationRoutes);
 router.use('/inventory', inventoryRoutes);
 router.use('/invoices', invoiceRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/dashboard', dashboardRoutes);
 
 // API documentation endpoint
 router.get('/', (req, res) => {
@@ -51,7 +53,8 @@ router.get('/', (req, res) => {
       vaccinations: '/api/vaccinations',
       inventory: '/api/inventory',
       invoices: '/api/invoices',
-      notifications: '/api/notifications'
+      notifications: '/api/notifications',
+      dashboard: '/api/dashboard'
     },
     documentation: 'https://github.com/yourusername/petcare-plus-api',
     timestamp: new Date().toISOString()
