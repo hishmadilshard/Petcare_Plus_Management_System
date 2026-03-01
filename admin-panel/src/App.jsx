@@ -1,374 +1,42 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-
-import { AuthProvider } from './contexts/AuthContext';
-import ProtectedRoute from './components/common/ProtectedRoute';
-import MainLayout from './components/layout/MainLayout';
-
-// Auth Pages
-import Login from './pages/auth/Login';
-import Unauthorized from './pages/auth/Unauthorized';
-
-// Dashboard Pages
-import AdminDashboard from './pages/dashboard/AdminDashboard';
-import VetDashboard from './pages/dashboard/VetDashboard';
-import ReceptionistDashboard from './pages/dashboard/ReceptionistDashboard';
-
-// Management Pages
-import UserManagement from './pages/users/UserManagement';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Layout from './components/Layout';
+import AppointmentsPage from './pages/appointments/AppointmentsPage';
+import MedicalRecordsPage from './pages/medical/MedicalRecordsPage';
+import VaccinationsPage from './pages/vaccinations/VaccinationsPage';
 import PetManagement from './pages/pets/PetManagement';
+import UserManagement from './pages/users/UserManagement';
+import SettingsPage from './pages/settings/settingsPage';
+import ServicesPage from './pages/services/ServicesPage';
+import VeterinariansPage from './pages/veterinarians/VeterinariansPage';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1
-    }
-  }
-});
-
-// Navy Blue & White Theme
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1e3a8a',
-      light: '#3b82f6',
-      dark: '#1e40af',
-      contrastText: '#ffffff'
-    },
-    secondary: {
-      main: '#0ea5e9',
-      light: '#38bdf8',
-      dark: '#0284c7',
-      contrastText: '#ffffff'
-    },
-    background: {
-      default: '#f8fafc',
-      paper: '#ffffff'
-    },
-    text: {
-      primary: '#1e293b',
-      secondary: '#64748b'
-    },
-    error: {
-      main: '#dc2626'
-    },
-    warning: {
-      main: '#f59e0b'
-    },
-    success: {
-      main: '#10b981'
-    },
-    info: {
-      main: '#0ea5e9'
-    }
-  },
-  typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-    h4: {
-      fontWeight: 700,
-      color: '#1e3a8a'
-    },
-    h5: {
-      fontWeight: 600,
-      color: '#1e3a8a'
-    },
-    h6: {
-      fontWeight: 600,
-      color: '#1e3a8a'
-    }
-  },
-  shape: {
-    borderRadius: 12
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          fontWeight: 600,
-          borderRadius: 8,
-          padding: '10px 24px'
-        },
-        contained: {
-          boxShadow: '0 4px 6px -1px rgba(30, 58, 138, 0.3)',
-          '&:hover': {
-            boxShadow: '0 10px 15px -3px rgba(30, 58, 138, 0.4)'
-          }
-        }
-      }
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          borderRadius: 16,
-          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
-        }
-      }
-    },
-    MuiDialog: {
-      styleOverrides: {
-        paper: {
-          borderRadius: 16
-        }
-      }
-    },
-    MuiTextField: {
-      defaultProps: {
-        variant: 'outlined',
-        size: 'medium'
-      }
-    }
-  }
-});
-
-// Dashboard Router Component
-const DashboardRouter = () => {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  
-  if (user.role === 'Admin') {
-    return <AdminDashboard />;
-  } else if (user.role === 'Vet') {
-    return <VetDashboard />;
-  } else if (user.role === 'Receptionist') {
-    return <ReceptionistDashboard />;
-  }
-  
-  return <Navigate to="/unauthorized" replace />;
-};
-
-function App() {
+const App = () => {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <BrowserRouter>
-          <AuthProvider>
-            <Routes>
-              {/* ==================== PUBLIC ROUTES ==================== */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/unauthorized" element={<Unauthorized />} />
+    <Router>
+      <ToastContainer position="top-right" autoClose={3000} />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        
+        <Route element={<Layout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/pets" element={<PetManagement />} />
+          <Route path="/appointments" element={<AppointmentsPage />} />
+          <Route path="/medical-records" element={<MedicalRecordsPage />} />
+          <Route path="/vaccinations" element={<VaccinationsPage />} />
+          <Route path="/users" element={<UserManagement />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/services" element={<ServicesPage />} />
+          <Route path="/veterinarians" element={<VeterinariansPage />} />
+        </Route>
 
-              {/* ==================== PROTECTED ROUTES ==================== */}
-              <Route 
-                path="/" 
-                element={
-                  <ProtectedRoute>
-                    <MainLayout />
-                  </ProtectedRoute>
-                }
-              >
-                {/* Default Redirect */}
-                <Route index element={<Navigate to="/dashboard" replace />} />
-                
-                {/* ==================== DASHBOARD ==================== */}
-                {/* All Roles - Shows different dashboard based on role */}
-                <Route path="dashboard" element={<DashboardRouter />} />
-                
-                {/* ==================== USER MANAGEMENT ==================== */}
-                {/* Admin Only - Full CRUD */}
-                <Route 
-                  path="users" 
-                  element={
-                    <ProtectedRoute allowedRoles={['Admin']}>
-                      <UserManagement />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* ==================== PET MANAGEMENT ==================== */}
-                {/* Admin: Full CRUD */}
-                {/* Vet: View, Add Medical Notes */}
-                {/* Receptionist: Full CRUD */}
-                <Route 
-                  path="pets" 
-                  element={
-                    <ProtectedRoute allowedRoles={['Admin', 'Vet', 'Receptionist']}>
-                      <PetManagement />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* ==================== APPOINTMENTS ==================== */}
-                {/* Admin: Full CRUD */}
-                {/* Vet: View, Update Status, Add Notes */}
-                {/* Receptionist: Full CRUD */}
-                <Route 
-                  path="appointments" 
-                  element={
-                    <ProtectedRoute allowedRoles={['Admin', 'Vet', 'Receptionist']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>📅 Appointment Management</h2>
-                        <p><strong>Admin:</strong> Full CRUD access</p>
-                        <p><strong>Vet:</strong> View appointments, update status, add clinical notes</p>
-                        <p><strong>Receptionist:</strong> Schedule, modify, cancel appointments</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* ==================== MEDICAL RECORDS ==================== */}
-                {/* Admin: View All */}
-                {/* Vet: Full CRUD (Diagnosis, Treatment, Prescriptions) */}
-                {/* Receptionist: No Access */}
-                <Route 
-                  path="medical-records" 
-                  element={
-                    <ProtectedRoute allowedRoles={['Admin', 'Vet']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>🏥 Medical Records</h2>
-                        <p><strong>Admin:</strong> View all medical records</p>
-                        <p><strong>Vet:</strong> Create, view, update medical records, add diagnosis, prescriptions</p>
-                        <p><strong>Receptionist:</strong> ❌ No Access</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* ==================== VACCINATIONS ==================== */}
-                {/* Admin: Full CRUD */}
-                {/* Vet: Full CRUD (Administer, Schedule) */}
-                {/* Receptionist: View, Schedule Reminders */}
-                <Route 
-                  path="vaccinations" 
-                  element={
-                    <ProtectedRoute allowedRoles={['Admin', 'Vet', 'Receptionist']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>💉 Vaccination Management</h2>
-                        <p><strong>Admin:</strong> Full CRUD access</p>
-                        <p><strong>Vet:</strong> Administer vaccines, create schedules, update records</p>
-                        <p><strong>Receptionist:</strong> View schedules, send reminders to pet owners</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* ==================== INVENTORY ==================== */}
-                {/* Admin: Full CRUD */}
-                {/* Vet: View Only */}
-                {/* Receptionist: Full CRUD (Stock Management) */}
-                <Route 
-                  path="inventory" 
-                  element={
-                    <ProtectedRoute allowedRoles={['Admin', 'Vet', 'Receptionist']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>📦 Inventory Management</h2>
-                        <p><strong>Admin:</strong> Full CRUD, manage suppliers, view reports</p>
-                        <p><strong>Vet:</strong> View available medicines and supplies</p>
-                        <p><strong>Receptionist:</strong> Add/update stock, track expiry dates, low stock alerts</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* ==================== INVOICES / BILLING ==================== */}
-                {/* Admin: Full CRUD, View All */}
-                {/* Vet: No Access */}
-                {/* Receptionist: Full CRUD (Create, Payment Tracking) */}
-                <Route 
-                  path="invoices" 
-                  element={
-                    <ProtectedRoute allowedRoles={['Admin', 'Receptionist']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>💰 Invoice Management</h2>
-                        <p><strong>Admin:</strong> View all invoices, financial reports</p>
-                        <p><strong>Vet:</strong> ❌ No Access</p>
-                        <p><strong>Receptionist:</strong> Create invoices, track payments, send reminders</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* ==================== NOTIFICATIONS ==================== */}
-                {/* Admin: Send All Types */}
-                {/* Vet: No Access */}
-                {/* Receptionist: Send to Pet Owners (Appointments, Reminders) */}
-                <Route 
-                  path="notifications" 
-                  element={
-                    <ProtectedRoute allowedRoles={['Admin', 'Receptionist']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>🔔 Notification Center</h2>
-                        <p><strong>Admin:</strong> Send all notifications (system, users, owners)</p>
-                        <p><strong>Vet:</strong> ❌ No Access</p>
-                        <p><strong>Receptionist:</strong> Send appointment reminders, vaccination alerts to pet owners</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* ==================== REPORTS & ANALYTICS ==================== */}
-                {/* Admin: All Reports (Revenue, Appointments, Inventory) */}
-                {/* Vet: Medical Reports Only */}
-                {/* Receptionist: No Access */}
-                <Route 
-                  path="reports" 
-                  element={
-                    <ProtectedRoute allowedRoles={['Admin', 'Vet']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>📊 Reports & Analytics</h2>
-                        <p><strong>Admin:</strong> All reports - revenue, appointments, inventory, user activity</p>
-                        <p><strong>Vet:</strong> Medical reports, treatment statistics, patient outcomes</p>
-                        <p><strong>Receptionist:</strong> ❌ No Access</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* ==================== SETTINGS ==================== */}
-                {/* Admin: System Settings, Clinic Info */}
-                {/* Vet: Profile Settings Only */}
-                {/* Receptionist: Profile Settings Only */}
-                <Route 
-                  path="settings" 
-                  element={
-                    <ProtectedRoute allowedRoles={['Admin', 'Vet', 'Receptionist']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>⚙️ Settings</h2>
-                        <p><strong>Admin:</strong> System configuration, clinic info, email/SMS settings, user preferences</p>
-                        <p><strong>Vet:</strong> Personal profile, change password, notification preferences</p>
-                        <p><strong>Receptionist:</strong> Personal profile, change password</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
-                    </ProtectedRoute>
-                  } 
-                />
-              </Route>
-
-              {/* ==================== 404 CATCH ALL ==================== */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-            
-            {/* Toast Notifications */}
-            <ToastContainer 
-              position="top-right" 
-              autoClose={3000}
-              hideProgressBar={false}
-              newestOnTop={false}
-              closeOnClick
-              rtl={false}
-              pauseOnFocusLoss
-              draggable
-              pauseOnHover
-              theme="light"
-              style={{ zIndex: 9999 }}
-            />
-          </AuthProvider>
-        </BrowserRouter>
-      </ThemeProvider>
-    </QueryClientProvider>
+        <Route path="/" element={<Navigate to="/dashboard" />} />
+      </Routes>
+    </Router>
   );
-}
+};
 
 export default App;
