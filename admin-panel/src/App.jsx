@@ -21,6 +21,10 @@ import ReceptionistDashboard from './pages/dashboard/ReceptionistDashboard';
 // Management Pages
 import UserManagement from './pages/users/UserManagement';
 import PetManagement from './pages/pets/PetManagement';
+import AppointmentsPage from './pages/appointments/AppointmentsPage';
+import MedicalRecordsPage from './pages/medical/MedicalRecordsPage';
+import BillingPage from './pages/billing/BillingPage';
+import InventoryPage from './pages/inventory/InventoryPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -201,13 +205,7 @@ function App() {
                   path="appointments" 
                   element={
                     <ProtectedRoute allowedRoles={['Admin', 'Vet', 'Receptionist']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>📅 Appointment Management</h2>
-                        <p><strong>Admin:</strong> Full CRUD access</p>
-                        <p><strong>Vet:</strong> View appointments, update status, add clinical notes</p>
-                        <p><strong>Receptionist:</strong> Schedule, modify, cancel appointments</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
+                      <AppointmentsPage />
                     </ProtectedRoute>
                   } 
                 />
@@ -220,13 +218,7 @@ function App() {
                   path="medical-records" 
                   element={
                     <ProtectedRoute allowedRoles={['Admin', 'Vet']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>🏥 Medical Records</h2>
-                        <p><strong>Admin:</strong> View all medical records</p>
-                        <p><strong>Vet:</strong> Create, view, update medical records, add diagnosis, prescriptions</p>
-                        <p><strong>Receptionist:</strong> ❌ No Access</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
+                      <MedicalRecordsPage />
                     </ProtectedRoute>
                   } 
                 />
@@ -258,13 +250,7 @@ function App() {
                   path="inventory" 
                   element={
                     <ProtectedRoute allowedRoles={['Admin', 'Vet', 'Receptionist']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>📦 Inventory Management</h2>
-                        <p><strong>Admin:</strong> Full CRUD, manage suppliers, view reports</p>
-                        <p><strong>Vet:</strong> View available medicines and supplies</p>
-                        <p><strong>Receptionist:</strong> Add/update stock, track expiry dates, low stock alerts</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
+                      <InventoryPage />
                     </ProtectedRoute>
                   } 
                 />
@@ -277,13 +263,7 @@ function App() {
                   path="invoices" 
                   element={
                     <ProtectedRoute allowedRoles={['Admin', 'Receptionist']}>
-                      <div style={{ padding: 20 }}>
-                        <h2>💰 Invoice Management</h2>
-                        <p><strong>Admin:</strong> View all invoices, financial reports</p>
-                        <p><strong>Vet:</strong> ❌ No Access</p>
-                        <p><strong>Receptionist:</strong> Create invoices, track payments, send reminders</p>
-                        <p style={{ color: '#64748b', marginTop: 20 }}>Coming Soon...</p>
-                      </div>
+                      <BillingPage />
                     </ProtectedRoute>
                   } 
                 />

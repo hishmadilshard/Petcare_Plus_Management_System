@@ -26,7 +26,9 @@ import {
   Logout,
   ChevronLeft,
   ChevronRight,
-  MedicalServices
+  MedicalServices,
+  Inventory,
+  Receipt
 } from '@mui/icons-material';
 
 const drawerWidth = 280;
@@ -52,56 +54,55 @@ const Sidebar = ({ open, onClose, collapsed, onToggleCollapse }) => {
     if (onClose) onClose();
   };
 
-  // Define menu items based on user role
   const getMenuItems = () => {
     return [
       {
         title: 'Dashboard',
         icon: <Dashboard />,
         path: '/dashboard',
-        roles: ['Admin', 'Veterinarian', 'Receptionist']
+        roles: ['Admin', 'Vet', 'Receptionist']
       },
       {
         title: 'Pet Management',
         icon: <Pets />,
         path: '/pets',
-        roles: ['Admin', 'Veterinarian', 'Receptionist']
-      },
-      {
-        title: 'Pet Owners',
-        icon: <People />,
-        path: '/pet-owners',
-        roles: ['Admin', 'Receptionist']
+        roles: ['Admin', 'Vet', 'Receptionist']
       },
       {
         title: 'Appointments',
         icon: <EventNote />,
         path: '/appointments',
-        roles: ['Admin', 'Veterinarian', 'Receptionist']
+        roles: ['Admin', 'Vet', 'Receptionist']
       },
       {
         title: 'Medical Records',
         icon: <Assignment />,
         path: '/medical-records',
-        roles: ['Admin', 'Veterinarian']
+        roles: ['Admin', 'Vet']
       },
       {
-        title: 'Veterinarians',
-        icon: <LocalHospital />,
-        path: '/veterinarians',
+        title: 'Inventory',
+        icon: <Inventory />,
+        path: '/inventory',
+        roles: ['Admin', 'Vet', 'Receptionist']
+      },
+      {
+        title: 'Billing',
+        icon: <Receipt />,
+        path: '/invoices',
+        roles: ['Admin', 'Receptionist']
+      },
+      {
+        title: 'Users',
+        icon: <People />,
+        path: '/users',
         roles: ['Admin']
-      },
-      {
-        title: 'Services',
-        icon: <MedicalServices />,
-        path: '/services',
-        roles: ['Admin', 'Veterinarian']
       },
       {
         title: 'Settings',
         icon: <Settings />,
         path: '/settings',
-        roles: ['Admin', 'Veterinarian', 'Receptionist']
+        roles: ['Admin', 'Vet', 'Receptionist']
       }
     ].filter(item => item.roles.includes(userRole));
   };
@@ -109,13 +110,7 @@ const Sidebar = ({ open, onClose, collapsed, onToggleCollapse }) => {
   const menuItems = getMenuItems();
 
   const isActive = (path) => {
-    if (path === '/pets') {
-      return location.pathname === '/pets' || location.pathname.startsWith('/pets/');
-    }
-    if (path === '/pet-owners') {
-      return location.pathname === '/pet-owners' || location.pathname.startsWith('/pet-owners/');
-    }
-    return location.pathname === path;
+    return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
   const drawerContent = (

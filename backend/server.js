@@ -4,6 +4,7 @@ const morgan = require('morgan');
 require('dotenv').config();
 
 const db = require('./config/database');
+const { apiLimiter, loginLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
 
@@ -13,14 +14,19 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
+// Apply global API rate limiting
+app.use('/api/', apiLimiter);
+
 // Routes
 const authRoutes = require('./routes/auth.routes');
 const petRoutes = require('./routes/pet.routes');
 const petOwnerRoutes = require('./routes/petOwner.routes');
+const apiRoutes = require('./routes/index');
 
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', loginLimiter, authRoutes);
 app.use('/api/pets', petRoutes);
 app.use('/api/pet-owners', petOwnerRoutes);
+app.use('/api', apiRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
